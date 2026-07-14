@@ -5,3 +5,6 @@ seaborn
 scikit-learn
 fastapi[standard]
 vaderSentiment
+sqlalchemy[asyncio]
+alembic
+asyncpg

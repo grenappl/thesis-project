@@ -72,29 +72,37 @@ pip install -r requirements.txt
 
 ### Backend Setup
 
-Navigate to the API directory:
+Install dependencies (from the project root):
 
 ```bash
-cd api
+uv sync
 ```
 
-Install dependencies:
+Copy the environment file and point it at your PostgreSQL instance:
 
 ```bash
-pip install -r ../requirements.txt
+cp api/.env.example api/.env
 ```
 
-Run the FastAPI server:
+Run database migrations:
 
 ```bash
-fastapi dev
+uv run alembic -c api/alembic.ini upgrade head
+```
+
+Run the FastAPI server (from the project root, since the API is a package named `api`):
+
+```bash
+uv run fastapi dev api/main.py
 ```
 
 or
 
 ```bash
-uvicorn main:app --reload
+uv run uvicorn api.main:app --reload
 ```
+
+See [api/README.md](api/README.md) for the backend's layered architecture (models, schemas, repositories, services, routers) and how to add a new migration.
 
 ---
 
