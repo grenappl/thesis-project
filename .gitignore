@@ -11,4 +11,5 @@ wheels/
 .env
 
 # NOTE: might remove
-*.npz
+notebooks/dataset/
+test
