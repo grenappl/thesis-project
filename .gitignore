@@ -12,4 +12,4 @@ wheels/
 
 # NOTE: might remove
 notebooks/dataset/
-test
+notebooks/logs

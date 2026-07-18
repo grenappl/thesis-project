@@ -17,4 +17,5 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.51",
     "vadersentiment>=3.3.2",
     "librosa>=0.11.0",
+    "langdetect>=1.0.9",
 ]
