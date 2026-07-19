@@ -10,5 +10,6 @@ alembic
 asyncpg
 librosa
 langdetect
+nltk
 # Linux-only (WSL) — no Windows wheel exists, see PIPELINE_SETUP.md
 essentia-tensorflow==2.1b6.dev1389 ; sys_platform == 'linux'
