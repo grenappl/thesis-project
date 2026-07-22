@@ -20,4 +20,7 @@ dependencies = [
     "langdetect>=1.0.9",
     "nltk>=3.10.0",
     "kagglehub>=1.0.2",
+    "torch>=2.13.0",
+    "transformers>=5.14.1",
+    "afinn>=0.1",
 ]

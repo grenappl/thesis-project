@@ -8,6 +8,9 @@ scikit-learn
 langdetect
 nltk
 vaderSentiment
+afinn
+torch
+transformers
 
 # backend
 fastapi[standard]
