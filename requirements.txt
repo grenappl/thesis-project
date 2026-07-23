@@ -9,8 +9,8 @@ langdetect
 nltk
 vaderSentiment
 afinn
-torch
-transformers
+transformers[torch]
+pysentimiento
 
 # backend
 fastapi[standard]

@@ -21,6 +21,7 @@ dependencies = [
     "nltk>=3.10.0",
     "kagglehub>=1.0.2",
     "torch>=2.13.0",
-    "transformers>=5.14.1",
     "afinn>=0.1",
+    "pysentimiento>=0.7.3",
+    "transformers[torch]>=5.14.1",
 ]
