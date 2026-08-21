@@ -13,3 +13,4 @@ wheels/
 # NOTE: might remove
 notebooks/dataset/
 notebooks/logs
+test
