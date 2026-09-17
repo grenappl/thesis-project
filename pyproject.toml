@@ -31,6 +31,8 @@ dependencies = [
     "tensorflow>=2.13.0 ; sys_platform == 'linux'",
     "setuptools>=70,<81",  # tensorflow_hub still imports pkg_resources, removed in setuptools 81+
     "yt-dlp>=2024.1.0",
+    "xgboost>=3.4.1",
+    "shap>=0.49.1",
 ]
 
 [dependency-groups]
