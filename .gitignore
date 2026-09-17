@@ -10,6 +10,18 @@ wheels/
 .venv
 .env
 
+# Downloaded model checkpoints (Essentia, PANNs) — large binaries, fetched
+# on demand, see feature_extraction.md for download links
+models/
+
+# Kaggle precomputed-embeddings dataset (vggish/panns/mert/mel_stats .npz +
+# songs.csv/artists.csv) — large binaries, fetched on demand, see
+# feature_extraction.md for the download link and what each file is for
+data/
+
+# Scratch space for uploaded audio awaiting the demo pipeline
+api/pipelines/demo/_uploads/
+
 # NOTE: might remove
 notebooks/dataset/
 notebooks/logs
