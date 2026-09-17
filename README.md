@@ -104,7 +104,7 @@ uv run uvicorn api.main:app --reload
 
 See [api/README.md](api/README.md) for the backend's layered architecture (models, schemas, repositories, services, routers) and how to add a new migration.
 
-The audio feature-extraction pipeline (`api/pipelines/`) depends on `essentia-tensorflow`, which has no Windows build and runs under WSL instead — see [PIPELINE_SETUP.md](PIPELINE_SETUP.md) for setup and how to run it.
+Feature extraction is split into two independent pipelines under `api/pipelines/` — see [feature_extraction.md](feature_extraction.md) for the full feature list, formulas, and library breakdown, and [PIPELINE_SETUP.md](PIPELINE_SETUP.md) for the Windows/WSL2 setup and how to run each one.
 
 ---
 

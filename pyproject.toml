@@ -24,4 +24,19 @@ dependencies = [
     "afinn>=0.1",
     "pysentimiento>=0.7.3",
     "transformers[torch]>=5.14.1",
+    "scipy>=1.18.0",
+    "panns-inference>=0.1.1",
+    "joblib>=1.5.3",
+    "tensorflow-hub>=0.16.1",
+    "tensorflow>=2.13.0 ; sys_platform == 'linux'",
+    "setuptools>=70,<81",  # tensorflow_hub still imports pkg_resources, removed in setuptools 81+
+    "yt-dlp>=2024.1.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
