@@ -1,0 +1,5 @@
+setting,params,control_r2,alignment_augmented_r2,delta_r2
+selected (frozen),{},0.06825043939296971,0.06783130544012128,-0.00041913395284842725
+"shallower, slower","{""max_depth"": 4, ""learning_rate"": 0.05}",0.06825043939296971,0.06783130544012128,-0.00041913395284842725
+"deeper, faster","{""max_depth"": 8, ""learning_rate"": 0.1}",0.06464169547308474,0.06366235583315027,-0.0009793396399344623
+less stochastic,"{""subsample"": 1.0, ""colsample_bytree"": 1.0}",0.06659127007331489,0.06640722217047756,-0.00018404790283732542

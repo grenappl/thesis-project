@@ -1,0 +1,13 @@
+{
+  "algorithm": "random_forest",
+  "tuned_on_feature_config": "control",
+  "selection_metric": "validation RMSE (fixed 15% partition)",
+  "params": {
+    "n_estimators": 500,
+    "min_samples_leaf": 5,
+    "max_depth": null,
+    "max_features_rule": "floor(p/3), recomputed per feature configuration",
+    "random_state": 42
+  },
+  "val_rmse": 14.71267586474953
+}
