@@ -1,0 +1,131 @@
+{
+  "random_seed": 42,
+  "split_ratio_target": {
+    "train": 70,
+    "val": 15,
+    "test": 15
+  },
+  "split_method": "Louvain community detection on the artist co-appearance graph (resolution=3.0, seed=42); whole communities assigned greedily, largest first, balancing size, genre mix and popularity-quintile mix (pop_weight=3.0); tracks whose credited artists fall in different partitions are dropped.",
+  "split_info": {
+    "method": "Louvain community detection + greedy balanced community assignment",
+    "resolution": 3.0,
+    "pop_weight": 3.0,
+    "n_pop_bands": 5,
+    "seed": 42,
+    "fractions": {
+      "train": 0.7,
+      "val": 0.15,
+      "test": 0.15
+    },
+    "artists": 48206,
+    "collaboration_edges": 69150,
+    "communities": 19500,
+    "largest_community_pct": 3.30804985778045,
+    "dropped_tracks": 4824,
+    "dropped_pct": 1.859260458340078
+  },
+  "corpus_rows": 259458,
+  "coappearance_diagnostic": {
+    "unique_artists": 48206,
+    "collaboration_edges": 69150,
+    "multi_artist_tracks": 48103,
+    "connected_components": 19348,
+    "largest_component_tracks": 132076,
+    "largest_component_share_pct": 50.904578004917944
+  },
+  "partition_counts": {
+    "train": 179218,
+    "val": 37784,
+    "test": 37632,
+    "dropped_cross_partition_collaboration": 4824
+  },
+  "modelled_rows": 254634,
+  "partition_shares_pct": {
+    "train": 70.383,
+    "val": 14.839,
+    "test": 14.779
+  },
+  "max_genre_deviation_pts": 1.9492016796080875,
+  "max_popularity_gap_pts": 0.7549217982931147,
+  "popularity_by_partition": {
+    "train": {
+      "count": 179218.0,
+      "mean": 24.5345,
+      "median": 23.0,
+      "std": 16.0587
+    },
+    "val": {
+      "count": 37784.0,
+      "mean": 23.7796,
+      "median": 22.0,
+      "std": 15.2752
+    },
+    "test": {
+      "count": 37632.0,
+      "mean": 23.9711,
+      "median": 22.0,
+      "std": 15.6324
+    }
+  },
+  "genre_mix_pct": {
+    "corpus": {
+      "Blues": 2.178,
+      "Classical": 1.957,
+      "Country": 7.746,
+      "Electronic": 15.108,
+      "Folk": 8.883,
+      "Hip-Hop": 8.896,
+      "Jazz": 1.739,
+      "Pop": 11.447,
+      "R&B": 4.922,
+      "Rock": 37.124
+    },
+    "train": {
+      "Blues": 2.2,
+      "Classical": 1.944,
+      "Country": 7.779,
+      "Electronic": 14.492,
+      "Folk": 8.909,
+      "Hip-Hop": 9.09,
+      "Jazz": 1.764,
+      "Pop": 11.411,
+      "R&B": 5.098,
+      "Rock": 37.312
+    },
+    "val": {
+      "Blues": 2.247,
+      "Classical": 1.9,
+      "Country": 7.956,
+      "Electronic": 14.302,
+      "Folk": 9.049,
+      "Hip-Hop": 8.429,
+      "Jazz": 1.675,
+      "Pop": 11.664,
+      "R&B": 4.076,
+      "Rock": 38.702
+    },
+    "test": {
+      "Blues": 2.259,
+      "Classical": 1.897,
+      "Country": 7.98,
+      "Electronic": 14.161,
+      "Folk": 9.221,
+      "Hip-Hop": 7.159,
+      "Jazz": 1.78,
+      "Pop": 11.562,
+      "R&B": 4.908,
+      "Rock": 39.073
+    }
+  },
+  "exclusion_reasons": {
+    "dropped_cross_partition_collaboration": 4824
+  },
+  "dropped_profile": {
+    "n": 4824,
+    "pct_of_corpus": 1.8592604583400782,
+    "all_are_collaborations": true,
+    "mean_credited_artists": 2.4906716417910446,
+    "mean_popularity": 33.632462686567166,
+    "kept_mean_popularity": 24.3392319957272
+  }
+}

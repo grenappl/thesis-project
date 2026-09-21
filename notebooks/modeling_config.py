@@ -147,6 +147,129 @@ def artist_lists(series):
     return series.apply(json.loads)
 
 
+def artist_graph(artist_list_series):
+    """Artist co-appearance graph: one node per artist, an edge between every
+    pair of artists credited on the same track, weighted by the number of
+    tracks they share."""
+    import networkx as nx
+
+    graph = nx.Graph()
+    for lst in artist_list_series:
+        graph.add_nodes_from(lst)
+        for i in range(len(lst)):
+            for j in range(i + 1, len(lst)):
+                a, b = lst[i], lst[j]
+                if graph.has_edge(a, b):
+                    graph[a][b]['weight'] += 1
+                else:
+                    graph.add_edge(a, b, weight=1)
+    return graph
+
+
+def community_partition(df, fractions, resolution=3.0, pop_weight=3.0,
+                        seed=RANDOM_SEED, n_pop_bands=5):
+    """Artist-disjoint partition of `df` that satisfies Section 4.9.1 literally.
+
+    1. Detect collaboration communities in the artist graph (Louvain; Blondel
+       et al., 2008), so artists who collaborate tend to share a community.
+    2. Assign whole communities to partitions greedily, largest first, choosing
+       for each the partition whose targets it overshoots least -- balancing
+       total size, genre mix, and popularity-quintile mix at once.
+    3. Any track whose credited artists landed in different partitions is
+       dropped. What remains has pairwise-disjoint artist sets under every
+       credit, not just the primary one.
+
+    `df` needs `artist_list` (parsed), `genre` and `popularity` columns.
+    Returns (labels, community, info): `labels` holds a partition name or
+    'dropped_cross_partition_collaboration' per row; `community` is the
+    primary artist's community id.
+    """
+    import networkx as nx
+
+    graph = artist_graph(df['artist_list'])
+    comms = nx.community.louvain_communities(
+        graph, weight='weight', resolution=resolution, seed=seed)
+    comm_of = {a: ci for ci, members in enumerate(comms) for a in members}
+
+    track_comms = df['artist_list'].apply(lambda lst: [comm_of[a] for a in lst])
+    primary_comm = track_comms.str[0].to_numpy()
+    n_comms = len(comms)
+
+    genres = sorted(df['genre'].unique())
+    genre_idx = df['genre'].map({g: i for i, g in enumerate(genres)}).to_numpy()
+    bands = pd.qcut(df['popularity'], n_pop_bands, labels=False, duplicates='drop').to_numpy()
+    n_bands = int(bands.max()) + 1
+
+    size = np.bincount(primary_comm, minlength=n_comms).astype(float)
+    genre_vec = np.zeros((n_comms, len(genres)))
+    np.add.at(genre_vec, (primary_comm, genre_idx), 1)
+    band_vec = np.zeros((n_comms, n_bands))
+    np.add.at(band_vec, (primary_comm, bands), 1)
+
+    n = len(df)
+    genre_mix = genre_vec.sum(axis=0) / n
+    band_mix = band_vec.sum(axis=0) / n
+    parts = list(fractions)
+    target = {p: fractions[p] * n for p in parts}
+    target_g = {p: fractions[p] * n * genre_mix for p in parts}
+    target_b = {p: fractions[p] * n * band_mix for p in parts}
+    cur = {p: 0.0 for p in parts}
+    cur_g = {p: np.zeros(len(genres)) for p in parts}
+    cur_b = {p: np.zeros(n_bands) for p in parts}
+
+    assign = {}
+    for c in np.argsort(-size, kind='stable'):
+        if size[c] == 0:
+            continue  # community holds only guest artists; placed via its tracks' primaries
+        best = None
+        for p in parts:
+            over_total = max(0.0, cur[p] + size[c] - target[p]) / target[p]
+            over_g = np.maximum(0, cur_g[p] + genre_vec[c] - target_g[p]) / np.maximum(target_g[p], 1)
+            over_b = np.maximum(0, cur_b[p] + band_vec[c] - target_b[p]) / np.maximum(target_b[p], 1)
+            room = -(target[p] - cur[p]) / n  # tie-break toward the emptiest partition
+            cost = over_total ** 2 + (over_g ** 2).sum() + pop_weight * (over_b ** 2).sum() + 1e-3 * room
+            if best is None or cost < best[0]:
+                best = (cost, p)
+        p = best[1]
+        assign[c] = p
+        cur[p] += size[c]
+        cur_g[p] += genre_vec[c]
+        cur_b[p] += band_vec[c]
+
+    # A community with no primary-credited tracks has no size and was skipped
+    # above; its artists only ever appear as guests. Place it with the
+    # partition of the first track that credits it, so it never forces a drop
+    # on its own.
+    for lst in track_comms:
+        home = next((assign[c] for c in lst if c in assign), None)
+        for c in lst:
+            if c not in assign and home is not None:
+                assign[c] = home
+
+    track_parts = track_comms.apply(lambda lst: {assign[c] for c in lst})
+    single = track_parts.str.len() == 1
+    labels = pd.Series(
+        np.where(single, track_parts.apply(lambda s: next(iter(s))),
+                 'dropped_cross_partition_collaboration'),
+        index=df.index)
+
+    info = {
+        'method': 'Louvain community detection + greedy balanced community assignment',
+        'resolution': resolution,
+        'pop_weight': pop_weight,
+        'n_pop_bands': n_bands,
+        'seed': seed,
+        'fractions': fractions,
+        'artists': graph.number_of_nodes(),
+        'collaboration_edges': graph.number_of_edges(),
+        'communities': n_comms,
+        'largest_community_pct': float(100 * size.max() / n),
+        'dropped_tracks': int((~single).sum()),
+        'dropped_pct': float(100 * (~single).mean()),
+    }
+    return labels, pd.Series(primary_comm, index=df.index), info
+
+
 def ensure_artifacts():
     os.makedirs(ARTIFACTS, exist_ok=True)
     return ARTIFACTS
