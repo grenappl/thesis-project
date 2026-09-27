@@ -1,55 +1,40 @@
-"""Fits the regression heads used by api.pipelines.demo.vggish_tfhub.
+"""Fits the regression heads used by api.pipelines.demo.regression_heads.
 
-Trains regressors on the Kaggle precomputed-embeddings dataset (Google's
-official TF-Hub VGGish embeddings, same source vggish_tfhub.py uses at
-inference time — see feature_extraction.md for why that match matters) for
-every target in _TARGET_MODELS. Run once, from WSL2 (or Windows — this
-script itself needs no Essentia):
+Every target shares one input: the mean-pooled TF-Hub VGGish embedding (128)
+concatenated with the PANNs CNN14 embedding compressed to 256 dims by a
+fitted PCA (`models/panns/panns_pca256.joblib`, built by streaming the 4 GB
+Kaggle PANNs file — see scripts/build_panns_pca.py). Both
+come from the same sources the pipeline computes at inference time, which is
+what makes Kaggle-trained heads transfer to new audio (local-vs-Kaggle
+cosine similarity: VGGish ~0.97, PANNs ~0.96).
+
+Run from WSL2 (memory: ~3 GB peak):
 
     uv run python scripts/train_vggish_ridge.py \\
-        data/kaggle_embeddings/vggish_embeddings.npz \\
         "/mnt/c/Users/User/Downloads/songs(1).csv"
 
-Writes models/vggish_ridge/{target}.joblib for each target in
-_TARGET_MODELS — the filename predates the GBM addition below (started as
-Ridge-only for three targets); not renamed since it's referenced throughout
-feature_extraction.md/CLAUDE.md/PIPELINE_SETUP.md and a rename isn't worth
-that churn.
+Writes models/regression_heads/{target}.joblib. If
+data/validation_songs/feature_cache.npz exists, also scores each model on
+the 66 real validation songs (same inputs the pipeline would compute), so a
+training run doubles as an end-to-end-equivalent validation.
 
-Model choice per target: all seven now use HistGradientBoostingRegressor,
-not Ridge — GBM was tested head-to-head against Ridge for every target
-tried in this project (not assumed to win, checked every time) and won on
-every metric, every time: valence/acousticness/danceability/loudness first
-(triggered by a Ridge-shrinkage problem seen in a real spot-check — L2
-shrinkage pulls predictions toward the mean, so songs with an extreme true
-value get systematically underestimated; acousticness's extreme-value-tail
-MAE dropped from 0.108 to 0.073, the clearest case), then
-instrumentalness/energy/speechiness in a follow-up round (corr 0.628→0.702,
-0.891→0.897, 0.725→0.762). `loudness` itself moved onto VGGish here for the
-first time in the first round — it had never been tried before, on the
-assumption Essentia's `ReplayGain` (a real DSP measurement) didn't need it;
-even plain Ridge (0.796 held-out corr) blew past Essentia's fitted-constant
-approach (0.605 real-song corr). `_ridge` is kept as an available factory,
-not deleted, in case a future target doesn't follow this pattern — nothing
-here should be read as "GBM always wins," just "it has so far, on every
-target actually tested."
-
-`liveness` was tried against VGGish too (Ridge held-out corr=0.419, GBM
-corr=0.472) and is the one target where this *didn't* help — both are well
-below the current PANNs crowd-noise-heuristic's real-song correlation
-(0.694). Not adopted; `liveness` stays a PANNs proxy, not a VGGish
-regression — see `api.pipelines.demo.liveness_panns`.
-
-`tempo` was tried too (held-out R^2=0.099, corr=0.315 — weak, as expected
-since VGGish embeddings aren't built to capture rhythmic periodicity) and
-deliberately left out of both _TARGET_MODELS and vggish_tfhub.py's
-_TARGETS: end-to-end it scored a better raw correlation (0.416) than the
-current Librosa estimate (0.182) only by compressing nearly every
-prediction into a narrow BPM band, which is a worse fit for this pipeline's
-actual use than a noisier, wider-ranging estimate. See
-feature_extraction.md's "Tempo" section for the full investigation
-(including why tempo's real problem is octave confusion, not just weak
-periodicity detection).
+How this design was arrived at (each step tested head-to-head, kept only if
+it won on both held-out Kaggle rows and the real songs):
+- GBM beat Ridge on every target tried (Ridge's L2 shrinkage under-predicts
+  extreme values — e.g. acousticness's extreme-tail MAE 0.108 -> 0.073).
+- More capacity kept helping: defaults (100 iterations) -> 1500 -> 3000
+  all improved, and models were still improving at each cap.
+- Adding PANNs to VGGish improved valence further (held-out corr 0.817 ->
+  0.830). MERT and mel-spectrogram-stats embeddings lost to VGGish alone.
+- Liveness moved off the old heuristic (mean PANNs probability over the
+  applause/cheering/crowd classes), which ranked songs well but sat on the
+  wrong scale — real-song MAE 0.224 -> 0.097 with a GBM head.
+- `tempo` is deliberately NOT here: a VGGish regression only "wins" by
+  compressing every prediction into a narrow BPM band, and using it to pick
+  Librosa's octave made correlation worse (0.182 -> 0.142). See
+  feature_extraction.md's "Tempo" section.
+- `mode` is deliberately NOT here either: a VGGish classifier was worse on
+  the real songs (0.667) than chroma-based detection.
 """
 
 from __future__ import annotations
@@ -61,72 +46,56 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 
-_ALPHAS = np.logspace(-3, 3, 13)
+TARGETS = ("valence", "acousticness", "danceability", "energy", "speechiness",
+           "instrumentalness", "loudness", "liveness")
 
-
-def _ridge():
-    return make_pipeline(StandardScaler(), RidgeCV(alphas=_ALPHAS))
-
-
-def _gbm():
-    return HistGradientBoostingRegressor(random_state=42)
-
-
-_TARGET_MODELS = {
-    "valence": _gbm,
-    "acousticness": _gbm,
-    "danceability": _gbm,
-    "loudness": _gbm,
-    "instrumentalness": _gbm,
-    "energy": _gbm,
-    "speechiness": _gbm,
-}
+GBM_CONFIG = dict(max_iter=5000, learning_rate=0.1, max_leaf_nodes=63, early_stopping=True,
+                  validation_fraction=0.1, n_iter_no_change=50, random_state=42)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("embeddings_npz", help="Path to vggish_embeddings.npz (id, features)")
     parser.add_argument("songs_csv", help="Path to the raw Spotify dataset CSV (songs(1).csv)")
-    parser.add_argument("--output-dir", default="models/vggish_ridge")
+    parser.add_argument("--vggish-npz", default="data/kaggle_embeddings/vggish_embeddings.npz")
+    parser.add_argument("--panns-pca-npz", default="data/kaggle_embeddings/panns_pca256.npz")
+    parser.add_argument("--pca", default="models/panns/panns_pca256.joblib")
+    parser.add_argument("--output-dir", default="models/regression_heads")
+    parser.add_argument("--targets", nargs="*", default=list(TARGETS))
     args = parser.parse_args()
 
-    targets = list(_TARGET_MODELS)
+    vg = np.load(args.vggish_npz, allow_pickle=True)
+    pn = np.load(args.panns_pca_npz, allow_pickle=True)
+    if not (vg["id"] == pn["id"]).all():
+        raise ValueError("VGGish and PANNs-PCA embedding files are not row-aligned")
+    X = np.hstack([vg["features"], pn["features"]]).astype(np.float32)
+    Y = pd.read_csv(args.songs_csv, usecols=["id", *args.targets]).set_index("id").loc[vg["id"]]
 
-    print("loading embeddings...")
-    embeddings = np.load(args.embeddings_npz, allow_pickle=True)
-    embeddings_df = pd.DataFrame({"id": embeddings["id"]})
-    features = embeddings["features"]
-
-    print("loading targets...")
-    songs = pd.read_csv(args.songs_csv, usecols=["id", *targets])
-
-    merged = embeddings_df.reset_index().merge(songs, on="id", how="inner").dropna(subset=targets)
-    print(f"matched {len(merged)}/{len(embeddings_df)} embeddings to rows with targets")
-
-    X = features[merged["index"].to_numpy()]
+    val = None
+    cache_path = Path("data/validation_songs/feature_cache.npz")
+    if cache_path.exists():
+        cache = np.load(cache_path, allow_pickle=True)
+        pca = joblib.load(args.pca)
+        val_X = np.hstack([cache["vggish"], pca.transform(cache["panns_emb"])]).astype(np.float32)
+        manifest = pd.read_csv("data/validation_songs/manifest.csv").set_index("id")
+        val = (val_X, manifest.loc[list(cache["id"])])
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    for target, model_factory in _TARGET_MODELS.items():
-        y = merged[target].to_numpy()
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-        model = model_factory()
-        model.fit(X_train, y_train)
-
-        r2 = model.score(X_test, y_test)
-        corr = np.corrcoef(model.predict(X_test), y_test)[0, 1]
-        print(f"{target} ({model_factory.__name__.strip('_')}): held-out R^2={r2:.3f} corr={corr:.3f}")
-
+    print(f"{'target':17}{'held-out corr':>14}{'real MAE':>10}{'real corr':>10}{'iters':>7}", flush=True)
+    for target in args.targets:
+        y = Y[target].to_numpy()
+        rows = np.flatnonzero(~np.isnan(y))
+        tr, te = train_test_split(rows, test_size=0.2, random_state=42)  # index split: no array copies
+        model = HistGradientBoostingRegressor(**GBM_CONFIG).fit(X[tr], y[tr])
+        held_out = np.corrcoef(model.predict(X[te]), y[te])[0, 1]
+        line = f"{target:17}{held_out:14.3f}"
+        if val is not None:
+            pred, real = model.predict(val[0]), val[1][target].to_numpy()
+            line += f"{np.abs(pred - real).mean():10.4f}{np.corrcoef(pred, real)[0, 1]:10.3f}"
+        print(f"{line}{model.n_iter_:7d}", flush=True)
         joblib.dump(model, output_dir / f"{target}.joblib")
-
-    print(f"saved models to {output_dir}/")
 
 
 if __name__ == "__main__":

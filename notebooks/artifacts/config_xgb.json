@@ -1,0 +1,18 @@
+{
+  "algorithm": "xgboost",
+  "tuned_on_feature_config": "control",
+  "selection_metric": "validation RMSE (fixed 15% partition)",
+  "params": {
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "n_estimators": 1000,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "objective": "reg:squarederror",
+    "random_state": 42,
+    "tree_method": "hist"
+  },
+  "early_stopping_rounds": 50,
+  "best_iteration_at_selection": 549,
+  "val_rmse": 14.640774423516984
+}

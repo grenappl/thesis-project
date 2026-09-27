@@ -34,12 +34,37 @@ type DemoFeatures = {
   duration_ms: number;
   key: number;
   mode: number;
+  // Optional: older pipeline runs don't send these.
+  key_alternative?: number;
+  mode_alternative?: number;
+  key_confidence?: number;
 };
 
 const PITCH_CLASS_NAMES = [
   "C", "C#/Db", "D", "D#/Eb", "E", "F",
   "F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B",
 ];
+
+// Mirrors LOW_KEY_CONFIDENCE_MARGIN in api/pipelines/demo/librosa_features.py:
+// below this margin, mode was right 0.61 of the time on 66 real songs vs 0.73
+// above it.
+const LOW_KEY_CONFIDENCE_MARGIN = 0.1;
+
+function formatKey(key: number, mode: number): string {
+  return `${PITCH_CLASS_NAMES[key]} ${mode === 1 ? "major" : "minor"}`;
+}
+
+function keyConfidenceNote(features: DemoFeatures): string | undefined {
+  if (
+    features.key_confidence == null ||
+    features.key_confidence >= LOW_KEY_CONFIDENCE_MARGIN ||
+    features.key_alternative == null ||
+    features.mode_alternative == null
+  ) {
+    return undefined;
+  }
+  return `Low confidence — could also be ${formatKey(features.key_alternative, features.mode_alternative)}`;
+}
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.round(ms / 1000);
@@ -157,9 +182,9 @@ export default function TestFeatureExtractionPage() {
             and its lyrics — except neither has ever been scored by Spotify.
             Upload a short audio clip (3s or longer) and optionally paste
             its lyrics to run both through the demo-app feature-extraction
-            pipeline — Librosa, PANNs, Essentia, TF-Hub VGGish + Ridge
-            regression, the speechiness regression, and VADER — and see what
-            it produces.
+            pipeline — Librosa, VGGish + PANNs embeddings with
+            gradient-boosted regression heads, and VADER — and see what it
+            produces.
           </p>
         </div>
 
@@ -329,32 +354,32 @@ function FeatureResults({ features }: { features: DemoFeatures }) {
         <ScaleBar
           label="Speechiness"
           value={features.speechiness}
-          source="Google TF-Hub VGGish embedding + Ridge regression"
-          explanation="Estimates how much of the track is spoken word versus music (0 = pure music, 1 = pure speech). Same VGGish-embedding-plus-Ridge-regression approach as Valence/Acousticness/Instrumentalness/Danceability/Energy, fit on real Spotify speechiness values — replaced an earlier regression calibrated only on synthetic text-to-speech clips, which real-song validation showed was weak."
+          source="VGGish + PANNs embeddings → gradient-boosted regression"
+          explanation="Estimates how much of the track is spoken word versus music (0 = pure music, 1 = pure speech). Two pretrained audio models (Google's VGGish and PANNs CNN14) turn the audio into embeddings; a gradient-boosted regression head fit on ~490k real Spotify tracks maps them onto a speechiness score. Real-song validation (66 songs): correlation 0.77."
         />
         <ScaleBar
           label="Liveness"
           value={features.liveness}
           source="PANNs CNN14 (PyTorch, AudioSet-pretrained)"
-          explanation="Estimates the probability an audience was present when this was recorded. There's no dedicated liveness model, so this reuses a general-purpose sound classifier (PANNs, trained on 527 everyday sound categories) and averages its predicted probability across the applause/cheering/crowd-noise categories specifically."
+          explanation="Estimates the probability an audience was present when this was recorded. Same VGGish + PANNs embeddings as the other features, with its own regression head fit on real Spotify liveness values — replaced an earlier heuristic (averaged applause/crowd-noise probabilities) that was on the wrong scale. Real-song validation: correlation 0.77, mean error 0.09."
         />
         <ScaleBar
           label="Valence"
           value={features.valence}
-          source="Google TF-Hub VGGish embedding + Ridge regression"
-          explanation="A measure of musical positivity — high values sound cheerful/euphoric, low values sound sad/angry. Google's official VGGish model turns the audio into a 128-dim embedding, then a Ridge regression (fit on ~490k real Spotify tracks) maps that embedding onto a valence score. Real-song validation: correlation 0.71 against actual Spotify values."
+          source="VGGish + PANNs embeddings → gradient-boosted regression"
+          explanation="A measure of musical positivity — high values sound cheerful/euphoric, low values sound sad/angry. Google's VGGish and PANNs CNN14 turn the audio into embeddings, then a gradient-boosted regression head (fit on ~490k real Spotify tracks) maps them onto a valence score. Real-song validation: correlation 0.78 against actual Spotify values."
         />
         <ScaleBar
           label="Acousticness"
           value={features.acousticness}
-          source="Google TF-Hub VGGish embedding + Ridge regression"
-          explanation="Confidence that the track is acoustic (not electronic/synthesized). Same VGGish embedding as Valence, a separate Ridge regression fit on real Spotify acousticness values. Real-song validation: correlation 0.86 — the strongest-tracking feature in the pipeline besides energy."
+          source="VGGish + PANNs embeddings → gradient-boosted regression"
+          explanation="Confidence that the track is acoustic (not electronic/synthesized). Same embeddings as Valence, a separate regression head fit on real Spotify acousticness values. Real-song validation: correlation 0.92 — one of the two strongest-tracking features, alongside energy."
         />
         <ScaleBar
           label="Instrumentalness"
           value={features.instrumentalness}
-          source="Google TF-Hub VGGish embedding + Ridge regression"
-          explanation="Confidence that the track has no vocals. Same VGGish embedding as Valence and Acousticness, a separate Ridge regression fit on real Spotify instrumentalness values. Real-song validation: correlation 0.65."
+          source="VGGish + PANNs embeddings → gradient-boosted regression"
+          explanation="Confidence that the track has no vocals. Same embeddings as Valence and Acousticness, a separate regression head fit on real Spotify instrumentalness values. Real-song validation: correlation 0.81."
         />
       </div>
 
@@ -368,14 +393,14 @@ function FeatureResults({ features }: { features: DemoFeatures }) {
           <RawStat
             label="Energy"
             value={features.energy.toFixed(4)}
-            source="Google TF-Hub VGGish embedding + Ridge regression"
-            explanation="A measure of intensity and activity — Spotify describes energetic tracks as loud, fast, and noisy. Same VGGish-embedding-plus-Ridge-regression approach as Valence/Acousticness/Instrumentalness, fit on real Spotify energy values. Real-song validation: correlation 0.92 — currently the single strongest-tracking feature in the pipeline."
+            source="VGGish + PANNs embeddings → gradient-boosted regression"
+            explanation="A measure of intensity and activity — Spotify describes energetic tracks as loud, fast, and noisy. Same embeddings-plus-regression-head approach as Valence/Acousticness/Instrumentalness, fit on real Spotify energy values. Real-song validation: correlation 0.93 — the strongest-tracking feature in the pipeline."
           />
           <RawStat
             label="Loudness"
             value={`${features.loudness.toFixed(2)} dB`}
-            source="Essentia ReplayGain algorithm"
-            explanation="Integrated loudness in decibels, via the ReplayGain 1.0 specification (equal-loudness-filtered signal energy) — a real signal-processing algorithm, not an ML model, and the same units Spotify's loudness column uses. Typical range is roughly -60 to 0 dB, quieter tracks closer to -60."
+            source="VGGish + PANNs embeddings → gradient-boosted regression"
+            explanation="Overall loudness in decibels, the same units Spotify's loudness column uses (typical range roughly -60 to 0 dB, quieter tracks closer to -60). Same embeddings-plus-regression-head approach as the other features, fit on real Spotify loudness values — it replaced a ReplayGain signal-processing measurement that tracked Spotify's values less closely. Real-song validation: correlation 0.85, mean error 1.6 dB."
           />
           <RawStat
             label="Tempo"
@@ -392,8 +417,8 @@ function FeatureResults({ features }: { features: DemoFeatures }) {
           <RawStat
             label="Danceability"
             value={features.danceability.toFixed(2)}
-            source="Google TF-Hub VGGish embedding + Ridge regression"
-            explanation="Estimates how suitable a track is for dancing. Same VGGish-embedding-plus-Ridge-regression approach as Valence/Acousticness/Instrumentalness/Energy, fit on real Spotify danceability values — replaced an earlier Essentia-algorithm approach that real-song validation showed was weak. Real-song validation: correlation 0.73."
+            source="VGGish + PANNs embeddings → gradient-boosted regression"
+            explanation="Estimates how suitable a track is for dancing. Same embeddings-plus-regression-head approach as Valence/Acousticness/Instrumentalness/Energy, fit on real Spotify danceability values — replaced an earlier Essentia-algorithm approach that real-song validation showed was weak. Real-song validation: correlation 0.78."
           />
           <RawStat
             label="Duration"
@@ -404,14 +429,16 @@ function FeatureResults({ features }: { features: DemoFeatures }) {
           <RawStat
             label="Key"
             value={PITCH_CLASS_NAMES[features.key]}
-            source="Librosa chroma + Krumhansl-Schmuckler"
-            explanation="The track's musical key (which of the 12 pitch classes it's centered on), detected by averaging the track's pitch-class energy (chroma) over time and finding which of 24 major/minor key profiles it correlates with best — the standard Krumhansl-Schmuckler technique."
+            source="Librosa chroma + Krumhansl-Schmuckler (Temperley profiles)"
+            note={keyConfidenceNote(features)}
+            explanation="The track's musical key (which of the 12 pitch classes it's centered on), detected by averaging the track's pitch-class energy (chroma) over time and finding which of 24 major/minor key profiles it correlates with best — the standard Krumhansl-Schmuckler technique, using Temperley's key profiles. Real-song validation: correct key about half the time (0.49). When the best and second-best profiles score almost the same, a low-confidence note names the runner-up — often the relative major/minor, which uses exactly the same notes."
           />
           <RawStat
             label="Mode"
             value={features.mode === 1 ? "Major" : "Minor"}
             source="Same key-detection step as Key"
-            explanation="Whether the detected key is major or minor, from the same chroma-profile correlation used for Key — major and minor each have a different expected pitch-class weighting, and whichever fits best wins."
+            note={keyConfidenceNote(features)}
+            explanation="Whether the detected key is major or minor, from the same chroma-profile correlation used for Key — major and minor each have a different expected pitch-class weighting, and whichever fits best wins. The weakest estimate in the pipeline: right about two-thirds of the time on 66 real songs (0.73 when confident, 0.61 when not). Many misses are relative-key swaps (e.g. C major vs A minor), which share every note."
           />
         </div>
       </div>
@@ -427,6 +454,8 @@ function FeatureResults({ features }: { features: DemoFeatures }) {
             alignmentGap={features.alignment_gap}
             valence={features.valence}
           />
+          <Separator />
+          <PopularityPrediction features={features} />
         </>
       )}
     </>
@@ -476,6 +505,110 @@ function SentimentSection({
             where <code className="rounded bg-muted px-1 py-0.5">valence_normalized = (2 * valence) - 1</code> rescales
             valence ({valence.toFixed(4)}) from [0, 1] onto the same [-1, 1] scale as VADER —
             here that&apos;s {valenceNormalized.toFixed(4)}.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+type Prediction = {
+  predicted_popularity: number;
+  base_value: number;
+  alignment_gap: number;
+  contributions: { audio: number; lyric_sentiment: number; alignment_gap: number };
+  features: { feature: string; value: number; contribution: number }[];
+  model: { name: string; test_r2: number; test_rmse: number; note: string };
+};
+
+// Posts the extracted features to POST /predict (which recomputes the
+// alignment gap itself) and shows the prediction with its TreeSHAP breakdown.
+function PopularityPrediction({ features }: { features: DemoFeatures }) {
+  const [prediction, setPrediction] = useState<Prediction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(features),
+    })
+      .then(async (res) => {
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.detail ?? `Request failed (${res.status})`);
+        return body as Prediction;
+      })
+      .then((p) => !cancelled && setPrediction(p))
+      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : String(err)));
+    return () => {
+      cancelled = true;
+    };
+  }, [features]);
+
+  const signed = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        Predicted popularity [0, 100]
+      </h2>
+      {error && (
+        <Alert variant="destructive">
+          <AlertTitle>Prediction failed</AlertTitle>
+          <AlertDescription className="whitespace-pre-wrap">{error}</AlertDescription>
+        </Alert>
+      )}
+      {!prediction && !error && (
+        <p className="text-sm text-muted-foreground">Predicting…</p>
+      )}
+      {prediction && (
+        <>
+          <div className="flex items-baseline gap-3">
+            <span className="text-4xl font-semibold tabular-nums">
+              {prediction.predicted_popularity.toFixed(1)}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              model average {prediction.base_value.toFixed(1)}
+            </span>
+          </div>
+          <Progress value={prediction.predicted_popularity} />
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            <RawStat
+              label="Audio features"
+              value={signed(prediction.contributions.audio)}
+              source="points vs. average"
+              explanation="How much the twelve audio descriptors together moved the prediction up or down from the model's average, measured with TreeSHAP (exact per-feature contributions for tree models)."
+            />
+            <RawStat
+              label="Lyric sentiment"
+              value={signed(prediction.contributions.lyric_sentiment)}
+              source="points vs. average"
+              explanation="How much the lyrics' VADER sentiment score moved the prediction."
+            />
+            <RawStat
+              label="Alignment gap"
+              value={signed(prediction.contributions.alignment_gap)}
+              source="points vs. average"
+              explanation="How much the lyric-music mismatch (the thesis's central feature) moved the prediction."
+            />
+          </div>
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-xs font-medium text-muted-foreground">
+              Largest individual contributions
+            </span>
+            {prediction.features.slice(0, 6).map((f) => (
+              <div key={f.feature} className="flex justify-between tabular-nums">
+                <span>{f.feature}</span>
+                <span className={f.contribution >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                  {signed(f.contribution)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {prediction.model.name} — test R² {prediction.model.test_r2.toFixed(3)}, RMSE{" "}
+            {prediction.model.test_rmse.toFixed(1)} points. {prediction.model.note}
           </p>
         </>
       )}

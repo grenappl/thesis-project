@@ -1,0 +1,104 @@
+{
+  "observed_delta_r2_xgboost": -0.00041913395284842725,
+  "bootstrap_ci": [
+    -0.0011454793284166181,
+    0.0003171082960692627
+  ],
+  "bootstrap_excludes_zero": false,
+  "seed_sensitivity": {
+    "seeds": [
+      42,
+      7,
+      1337,
+      2024,
+      99
+    ],
+    "r2_std_across_seeds": 0.0005125132589553041,
+    "mean_delta_r2": -0.0001559559892473583,
+    "delta_exceeds_seed_noise": false,
+    "sign_consistent": false
+  },
+  "cross_validation": {
+    "k": 5,
+    "fold_method": "Louvain community detection + greedy balanced community assignment",
+    "cross_fold_collaborations_dropped_pct": 2.320192904325424,
+    "mean_delta_r2": 7.816261031985405e-05,
+    "std_delta_r2": 0.0009691597859177782,
+    "sign_consistent_across_folds": false,
+    "per_fold": [
+      {
+        "fold": 0,
+        "n_holdout": 46813,
+        "control_r2": 0.164708,
+        "alignment_augmented_r2": 0.166213,
+        "delta_r2": 0.001505
+      },
+      {
+        "fold": 1,
+        "n_holdout": 50993,
+        "control_r2": 0.022881,
+        "alignment_augmented_r2": 0.022026,
+        "delta_r2": -0.000855
+      },
+      {
+        "fold": 2,
+        "n_holdout": 50705,
+        "control_r2": 0.112569,
+        "alignment_augmented_r2": 0.112076,
+        "delta_r2": -0.000493
+      },
+      {
+        "fold": 3,
+        "n_holdout": 49732,
+        "control_r2": 0.144653,
+        "alignment_augmented_r2": 0.144259,
+        "delta_r2": -0.000393
+      },
+      {
+        "fold": 4,
+        "n_holdout": 50483,
+        "control_r2": 0.100832,
+        "alignment_augmented_r2": 0.101459,
+        "delta_r2": 0.000626
+      }
+    ]
+  },
+  "hyperparameter_robustness": {
+    "direction_preserved": false,
+    "settings": [
+      {
+        "setting": "selected (frozen)",
+        "params": "{}",
+        "control_r2": 0.06825,
+        "alignment_augmented_r2": 0.067831,
+        "delta_r2": -0.000419
+      },
+      {
+        "setting": "deeper, slower",
+        "params": "{\"max_depth\": 6, \"learning_rate\": 0.01}",
+        "control_r2": 0.067536,
+        "alignment_augmented_r2": 0.067841,
+        "delta_r2": 0.000306
+      },
+      {
+        "setting": "deeper, faster",
+        "params": "{\"max_depth\": 8, \"learning_rate\": 0.1}",
+        "control_r2": 0.064642,
+        "alignment_augmented_r2": 0.063662,
+        "delta_r2": -0.000979
+      },
+      {
+        "setting": "less stochastic",
+        "params": "{\"subsample\": 1.0, \"colsample_bytree\": 1.0}",
+        "control_r2": 0.066591,
+        "alignment_augmented_r2": 0.066407,
+        "delta_r2": -0.000184
+      }
+    ]
+  },
+  "cross_algorithm": {
+    "xgboost_delta_r2": -0.00041913395284842725,
+    "random_forest_delta_r2": 0.0002653993950146871,
+    "sign_agreement": false
+  }
+}

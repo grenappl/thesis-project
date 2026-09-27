@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import get_settings
-from api.routers import demo_features, tracks
+from api.routers import demo_features, prediction, tracks
 
 settings = get_settings()
 
@@ -18,6 +18,7 @@ app.add_middleware(
 
 app.include_router(tracks.router)
 app.include_router(demo_features.router)
+app.include_router(prediction.router)
 
 
 @app.get("/")

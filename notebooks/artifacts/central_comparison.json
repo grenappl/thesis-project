@@ -1,0 +1,27 @@
+{
+  "xgboost": {
+    "control_r2": 0.06825043939296971,
+    "alignment_augmented_r2": 0.06783130544012128,
+    "delta_r2": -0.00041913395284842725,
+    "delta_r2_as_pct_of_control_r2": -0.6141117281826629,
+    "ci_low": -0.0011454793284166181,
+    "ci_high": 0.0003171082960692627,
+    "ci_excludes_zero": false,
+    "delta_rmse_points": 0.0033934793974683686,
+    "delta_mae_points": 0.005364312093426804,
+    "n_bootstrap": 10000
+  },
+  "random_forest": {
+    "control_r2": 0.06230961298849036,
+    "alignment_augmented_r2": 0.06257501238350505,
+    "delta_r2": 0.0002653993950146871,
+    "delta_r2_as_pct_of_control_r2": 0.4259365165110412,
+    "ci_low": -0.0007154962411596383,
+    "ci_high": 0.00123338407986526,
+    "ci_excludes_zero": false,
+    "delta_rmse_points": -0.0021423564631479763,
+    "delta_mae_points": -0.006056714067597113,
+    "n_bootstrap": 10000
+  },
+  "cross_algorithm_sign_agreement": false
+}

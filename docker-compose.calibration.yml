@@ -1,0 +1,26 @@
+# Usage (from the project root, on the GPU PC):
+#   docker compose -f docker-compose.calibration.yml build
+#   docker compose -f docker-compose.calibration.yml run --rm calibrate check
+#   docker compose -f docker-compose.calibration.yml run --rm calibrate all
+# See docs/gpu_calibration_setup.md.
+services:
+  calibrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.calibration
+    image: thesis-calibration
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    entrypoint: ["bash", "scripts/calibration/run_calibration.sh"]
+    command: ["check"]
+    # Training loads ~2 GB of embeddings plus sklearn copies; the default
+    # 64 MB /dev/shm is too small for torch data loading on some setups.
+    shm_size: "2gb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

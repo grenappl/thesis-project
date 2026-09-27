@@ -3,29 +3,38 @@ from pydantic import BaseModel
 
 class DemoFeaturesRead(BaseModel):
     energy: float
-    """Google TF-Hub VGGish embedding + Ridge regression, fit on real Spotify energy values."""
+    """VGGish + PANNs-CNN14 embeddings -> gradient-boosted regression head, fit on real Spotify energy values."""
     tempo: float
     spectral_centroid: float
     speechiness: float
-    """Google TF-Hub VGGish embedding + Ridge regression, fit on real Spotify speechiness values."""
+    """VGGish + PANNs-CNN14 embeddings -> gradient-boosted regression head, fit on real Spotify speechiness values."""
     liveness: float
+    """VGGish + PANNs-CNN14 embeddings -> gradient-boosted regression head, fit on real Spotify liveness values."""
     danceability: float
-    """Google TF-Hub VGGish embedding + Ridge regression, fit on real Spotify danceability values."""
+    """VGGish + PANNs-CNN14 embeddings -> gradient-boosted regression head, fit on real Spotify danceability values."""
     valence: float
-    """Google TF-Hub VGGish embedding + Ridge regression, fit on real Spotify valence values."""
+    """VGGish + PANNs-CNN14 embeddings -> gradient-boosted regression head, fit on real Spotify valence values."""
     loudness: float
-    """dB, via Essentia's ReplayGain algorithm — same units as Spotify's
-    loudness column."""
+    """dB, same units as Spotify's loudness column — VGGish + PANNs-CNN14
+    embeddings -> gradient-boosted regression head, fit on real Spotify loudness values."""
     acousticness: float
-    """Google TF-Hub VGGish embedding + Ridge regression, fit on real Spotify acousticness values."""
+    """VGGish + PANNs-CNN14 embeddings -> gradient-boosted regression head, fit on real Spotify acousticness values."""
     instrumentalness: float
-    """Google TF-Hub VGGish embedding + Ridge regression, fit on real Spotify instrumentalness values."""
+    """VGGish + PANNs-CNN14 embeddings -> gradient-boosted regression head, fit on real Spotify instrumentalness values."""
     duration_ms: float
     key: int
     """0=C, 1=C#/Db, ..., 11=B — Spotify's key encoding, via chroma-profile
-    correlation (Krumhansl-Schmuckler)."""
+    correlation (Krumhansl-Schmuckler method, Temperley profiles)."""
     mode: int
     """1=major, 0=minor, from the same key-detection step as `key`."""
+    key_alternative: int | None = None
+    mode_alternative: int | None = None
+    """Runner-up key/mode from the same step — often the relative
+    major/minor (same notes, different home note)."""
+    key_confidence: float | None = None
+    """Correlation margin between the winning and runner-up key profiles.
+    Below ~0.10 the key/mode call is noticeably less reliable (mode 0.61 vs
+    0.73 correct on 66 real songs)."""
 
     lyric_sentiment: float | None = None
     """VADER compound score on the submitted lyrics. None when no lyrics

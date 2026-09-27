@@ -1,0 +1,46 @@
+# GPU calibration environment for Pipeline 2 (audio feature extraction).
+#
+# The image holds only the Python environment. The project folder (code,
+# data/, models/) is mounted at /workspace at run time, so outputs land
+# straight on the host and code edits need no rebuild. See
+# docs/gpu_calibration_setup.md.
+#
+# GPU use: PyTorch (PANNs CNN14, the heaviest per-song step) runs on CUDA.
+# The PyPI Linux torch wheel ships its own CUDA runtime, so the base image
+# needs none; the NVIDIA driver comes from the host via Docker's GPU support.
+# TensorFlow (VGGish) is pinned to CPU in vggish_tfhub.py on purpose.
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+# wget: panns_inference shells out to it on first import.
+# ffmpeg: decoding mp3 (librosa/audioread) and yt-dlp downloads.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates curl wget ffmpeg libsndfile1 git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# The venv and Python live outside /workspace so the bind mount can't hide
+# them (and the Windows host's own .venv is never used in here).
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1
+
+WORKDIR /opt/build
+COPY pyproject.toml uv.lock .python-version ./
+RUN uv sync --frozen --no-install-project
+
+# Fetch panns_inference's AudioSet label list now, not on every container start.
+RUN /opt/venv/bin/python -c "import panns_inference" || true
+
+ENV PATH=/opt/venv/bin:$PATH \
+    UV_NO_SYNC=1 \
+    PYTHONPATH=/workspace \
+    PYTHONUNBUFFERED=1 \
+    TF_CPP_MIN_LOG_LEVEL=3 \
+    SONGS_CSV=/workspace/data/songs.csv
+
+WORKDIR /workspace
+CMD ["bash", "scripts/calibration/run_calibration.sh", "check"]

@@ -1,0 +1,4 @@
+# Shell scripts run inside the Linux calibration container; a Windows
+# checkout with CRLF endings breaks them ("$'\r': command not found").
+*.sh text eol=lf
+Dockerfile* text eol=lf

@@ -3,20 +3,18 @@
 Extracts the same descriptor set as Pipeline 1, but from a raw audio file
 for a new, user-submitted song that isn't in the training dataset. Two
 inputs: the audio file (required) and the song's lyrics (optional — omit
-for instrumental tracks). Combines Librosa (tempo, spectral centroid,
-duration, key, mode), PANNs CNN14 (liveness), TF-Hub VGGish + a regression
-head per target (valence, acousticness, instrumentalness, danceability,
-energy, speechiness, loudness — run as an isolated subprocess, see
-vggish_tfhub.py — all twelve Spotify audio descriptors are now covered),
-and VADER (lyric sentiment + the alignment gap against the VGGish valence
-estimate). Essentia is no longer called at all — loudness (its last job)
-moved to the VGGish path after real-song validation showed a large accuracy
-win (corr 0.605 -> 0.796+); see feature_extraction.md's "Real-song
-validation" section. `essentia_features.py` still exists but nothing in
-this pipeline calls it anymore.
+for instrumental tracks).
 
-This whole module runs under WSL2 — see feature_extraction.md for why the
-pipeline isn't split across Windows and WSL2 per-feature. Run it with:
+- Librosa: tempo, spectral centroid, duration, key, mode (plain DSP).
+- VGGish (TF-Hub, isolated subprocess) + PANNs CNN14 embeddings, fed to one
+  gradient-boosted regression head per target trained on ~491k real
+  Spotify tracks: valence, acousticness, danceability, energy, speechiness,
+  instrumentalness, loudness, liveness. See regression_heads.py.
+- VADER: lyric sentiment + the alignment gap against the estimated valence.
+
+Essentia is no longer called at all (essentia_features.py is kept but
+unused). This module still runs under WSL2 — see feature_extraction.md.
+Run it with:
 
     uv run python -m api.pipelines.demo.pipeline <audio_path> [--lyrics-file <path>]
 
@@ -31,11 +29,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from api.pipelines.demo.alignment import compute_alignment_gap
 from api.pipelines.demo.audio_io import load_audio
-from api.pipelines.demo.liveness_panns import extract_liveness
 from api.pipelines.demo.librosa_features import extract_librosa_features
 from api.pipelines.demo.lyric_sentiment import compute_lyric_sentiment
+from api.pipelines.demo.panns_embedding import extract_panns_embedding
+from api.pipelines.demo.regression_heads import DEFAULT_HEADS_DIR, predict_features
 
 
 def _log(message: str) -> None:
@@ -46,27 +47,24 @@ def _log(message: str) -> None:
     print(f"[pipeline] {message}", file=sys.stderr, flush=True)
 
 
-def _run_vggish_subprocess(audio_path: str | Path, models_dir: str | None) -> dict[str, float]:
-    """Runs valence/acousticness/instrumentalness/danceability/energy/
-    speechiness/loudness in a fresh process — see
+def _run_vggish_subprocess(audio_path: str | Path) -> np.ndarray:
+    """VGGish embedding from a fresh process — see
     api.pipelines.demo.vggish_tfhub's docstring for why this can't be an
     in-process import (Essentia's bundled TensorFlow crashes if a
     standalone tensorflow/tensorflow_hub is loaded in the same process).
     """
     cmd = [sys.executable, "-m", "api.pipelines.demo.vggish_tfhub", str(audio_path)]
-    if models_dir is not None:
-        cmd += ["--models-dir", models_dir]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"vggish_tfhub subprocess failed:\n{result.stderr.strip()}")
-    return json.loads(result.stdout)
+    return np.array(json.loads(result.stdout.strip().splitlines()[-1]), dtype=np.float32)
 
 
 def extract_demo_features(
     audio_path: str | Path,
     lyrics: str | None = None,
     panns_checkpoint: str | None = None,
-    vggish_ridge_models_dir: str | None = None,
+    regression_heads_dir: str | Path = DEFAULT_HEADS_DIR,
 ) -> dict[str, float]:
     """Run the full demo-side extraction for one uploaded audio file, plus
     optional lyrics for the sentiment + alignment gap features.
@@ -81,14 +79,14 @@ def extract_demo_features(
     _log("extracting Librosa features (tempo, spectral centroid, duration, key, mode)")
     features = extract_librosa_features(y, sr)
 
-    _log("extracting liveness (PANNs CNN14)")
-    features["liveness"] = extract_liveness(y, sr, checkpoint_path=panns_checkpoint)
+    _log("computing PANNs CNN14 embedding")
+    panns_embedding = extract_panns_embedding(y, sr, checkpoint_path=panns_checkpoint)
 
-    _log(
-        "extracting valence/acousticness/instrumentalness/danceability/energy/speechiness/loudness "
-        "(TF-Hub VGGish + a regression head per target, isolated subprocess)"
-    )
-    features.update(_run_vggish_subprocess(audio_path, vggish_ridge_models_dir))
+    _log("computing TF-Hub VGGish embedding (isolated subprocess)")
+    vggish_embedding = _run_vggish_subprocess(audio_path)
+
+    _log("predicting valence/acousticness/danceability/energy/speechiness/instrumentalness/loudness/liveness")
+    features.update(predict_features(vggish_embedding, panns_embedding, heads_dir=regression_heads_dir))
 
     if lyrics is not None:
         _log("computing lyric sentiment (VADER compound score)")
@@ -105,31 +103,23 @@ def extract_demo_features(
 
 if __name__ == "__main__":
     import argparse
-    import json
 
-    parser = argparse.ArgumentParser(
-        description="Pipeline 2: extract demo-app features from a raw audio file."
-    )
+    parser = argparse.ArgumentParser(description="Pipeline 2: extract demo-app features from a raw audio file.")
     parser.add_argument("audio_path", help="Path to the uploaded audio file")
-    parser.add_argument(
-        "--lyrics-file", default=None, help="Path to a UTF-8 text file with the song's lyrics (optional)"
-    )
+    parser.add_argument("--lyrics-file", default=None, help="Path to a UTF-8 text file with the song's lyrics (optional)")
     parser.add_argument("--panns-checkpoint", default=None, help="Path to Cnn14_mAP=0.431.pth")
     parser.add_argument(
-        "--vggish-ridge-models-dir",
-        default=None,
-        help="Directory with the fitted .joblib regression models (default: models/vggish_ridge)",
+        "--regression-heads-dir",
+        default=str(DEFAULT_HEADS_DIR),
+        help="Directory with the fitted .joblib regression heads (default: models/regression_heads)",
     )
     args = parser.parse_args()
 
-    lyrics_text = None
-    if args.lyrics_file:
-        lyrics_text = Path(args.lyrics_file).read_text(encoding="utf-8")
-
+    lyrics_text = Path(args.lyrics_file).read_text(encoding="utf-8") if args.lyrics_file else None
     result = extract_demo_features(
         args.audio_path,
         lyrics=lyrics_text,
         panns_checkpoint=args.panns_checkpoint,
-        vggish_ridge_models_dir=args.vggish_ridge_models_dir,
+        regression_heads_dir=args.regression_heads_dir,
     )
     print(json.dumps(result, indent=2))

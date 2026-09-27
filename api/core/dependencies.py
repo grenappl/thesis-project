@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.core.config import Settings, get_settings
 from api.core.database import get_db_session
 from api.services.demo_feature_extraction_service import DemoFeatureExtractionService
+from api.services.popularity_prediction_service import PopularityPredictionService
 from api.services.track_service import TrackService
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
@@ -25,4 +26,13 @@ def get_demo_feature_extraction_service(settings: SettingsDep) -> DemoFeatureExt
 
 DemoFeatureExtractionServiceDep = Annotated[
     DemoFeatureExtractionService, Depends(get_demo_feature_extraction_service)
+]
+
+
+def get_popularity_prediction_service(settings: SettingsDep) -> PopularityPredictionService:
+    return PopularityPredictionService(settings)
+
+
+PopularityPredictionServiceDep = Annotated[
+    PopularityPredictionService, Depends(get_popularity_prediction_service)
 ]
