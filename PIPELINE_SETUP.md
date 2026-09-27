@@ -2,6 +2,11 @@
 
 ## Setting up on a new machine (fresh clone)
 
+> **Recreating the calibration on another machine?** Use the GPU Docker
+> setup in [docs/gpu_calibration_setup.md](docs/gpu_calibration_setup.md)
+> instead of the manual WSL2 steps below. It needs only Docker Desktop and
+> an NVIDIA driver.
+
 Everything below in one order, for when you're doing this on a different
 computer than the one this was developed on. Each step links to the section
 with the full explanation.
@@ -50,14 +55,18 @@ with the full explanation.
    connection. Verify it downloaded intact: `md5sum "models/panns/Cnn14_mAP=0.431.pth"`
    should read `541141fa2ee191a88f24a3219fff024e`.)
 
-6. **Train the VGGish regression models** (valence/acousticness/
-   instrumentalness/danceability/energy/speechiness/loudness) — not a
-   download, a one-time training run against the Kaggle precomputed-
-   embeddings dataset (see [feature_extraction.md](feature_extraction.md)
-   for what this fixes and why). From WSL2:
+6. **Train the regression heads** (valence/acousticness/danceability/
+   energy/speechiness/instrumentalness/loudness/liveness) — not a download,
+   a one-time training run against the Kaggle precomputed-embeddings dataset
+   (see [feature_extraction.md](feature_extraction.md) for what this fixes
+   and why). Two steps, in order, from WSL2 — the first compresses the
+   ~4GB PANNs embeddings to 256 dims (streams them chunk by chunk, fits in
+   ~8GB RAM), the second trains one gradient-boosted head per target on
+   VGGish + PANNs-PCA features:
    ```bash
+   uv run python scripts/build_panns_pca.py      # -> models/panns/panns_pca256.joblib
    uv run python scripts/train_vggish_ridge.py \
-     data/kaggle_embeddings/vggish_embeddings.npz "/mnt/c/Users/User/Downloads/songs(1).csv"
+     "/mnt/c/Users/User/Downloads/songs(1).csv"  # -> models/regression_heads/*.joblib
    ```
 
 7. **Verify everything**:
@@ -210,7 +219,7 @@ uv run python -m api.pipelines.training.pipeline "C:\path\to\songs(1).csv" noteb
 cd /mnt/d/Projects/thesis-project
 uv run python -m api.pipelines.demo.pipeline path/to/uploaded_song.wav \
   --panns-checkpoint "models/panns/Cnn14_mAP=0.431.pth" \
-  --vggish-ridge-models-dir models/vggish_ridge
+  --regression-heads-dir models/regression_heads
 ```
 
 Or, without opening a WSL shell yourself, from a Windows terminal:

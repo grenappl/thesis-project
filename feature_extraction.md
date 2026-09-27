@@ -30,9 +30,10 @@ api/pipelines/
 └── demo/                 # Pipeline 2 — extracts features from raw audio + lyrics
     ├── audio_io.py         shared decode + edge-case handling
     ├── librosa_features.py tempo, spectral centroid, key, mode, duration
-    ├── liveness_panns.py   PANNs CNN14 crowd-noise proxy
+    ├── panns_embedding.py  PANNs CNN14 2048-dim embedding (input to the regression heads)
     ├── essentia_features.py unused — kept but not called, see "Real-song validation" below
-    ├── vggish_tfhub.py      valence/acousticness/instrumentalness/danceability/energy/speechiness/loudness (TF-Hub VGGish + a regression head per target, own subprocess)
+    ├── vggish_tfhub.py      TF-Hub VGGish 128-dim embedding (own subprocess, prints JSON)
+    ├── regression_heads.py  VGGish ⊕ PANNs-PCA(256) → one GBM head per target: valence/acousticness/danceability/energy/speechiness/instrumentalness/loudness/liveness
     ├── lyric_sentiment.py  VADER lyric sentiment (own copy, not shared with Pipeline 1)
     ├── alignment.py        alignment gap against the VGGish valence estimate (own copy)
     └── pipeline.py          orchestrator (combines all of the above)
@@ -43,33 +44,31 @@ api/pipelines/
 | Feature | Pipeline 1 (training) source | Pipeline 2 (demo) source |
 |---|---|---|
 | `tempo` | dataset column | Librosa (onset-strength autocorrelation) |
-| `loudness` | dataset column | TF-Hub VGGish embedding + gradient-boosted trees, trained on Kaggle precomputed embeddings |
-| `key` | dataset column | Librosa chroma + Krumhansl-Schmuckler key-profile correlation |
+| `loudness` | dataset column | VGGish + PANNs-PCA embeddings → gradient-boosted regression head, trained on Kaggle precomputed embeddings |
+| `key` | dataset column | Librosa chroma + Krumhansl-Schmuckler key-profile correlation (Temperley profiles) |
 | `mode` | dataset column | same key-detection step as `key` (major/minor) |
-| `energy` | dataset column | TF-Hub VGGish embedding + Ridge regression, trained on Kaggle precomputed embeddings |
-| `danceability` | dataset column | TF-Hub VGGish embedding + gradient-boosted trees, trained on Kaggle precomputed embeddings |
-| `speechiness` | dataset column | TF-Hub VGGish embedding + Ridge regression, trained on Kaggle precomputed embeddings |
-| `acousticness` | dataset column | TF-Hub VGGish embedding + gradient-boosted trees, trained on Kaggle precomputed embeddings |
-| `instrumentalness` | dataset column | TF-Hub VGGish embedding + Ridge regression, trained on Kaggle precomputed embeddings |
-| `liveness` | dataset column | PANNs CNN14 (mean prob. over crowd-noise classes) |
+| `energy` | dataset column | VGGish + PANNs-PCA embeddings → gradient-boosted regression head, trained on Kaggle precomputed embeddings |
+| `danceability` | dataset column | VGGish + PANNs-PCA embeddings → gradient-boosted regression head, trained on Kaggle precomputed embeddings |
+| `speechiness` | dataset column | VGGish + PANNs-PCA embeddings → gradient-boosted regression head, trained on Kaggle precomputed embeddings |
+| `acousticness` | dataset column | VGGish + PANNs-PCA embeddings → gradient-boosted regression head, trained on Kaggle precomputed embeddings |
+| `instrumentalness` | dataset column | VGGish + PANNs-PCA embeddings → gradient-boosted regression head, trained on Kaggle precomputed embeddings |
+| `liveness` | dataset column | VGGish + PANNs-PCA embeddings → gradient-boosted regression head, trained on Kaggle precomputed embeddings |
 | `duration_ms` | dataset column | Librosa — `len(y) / sr * 1000`, no estimation needed |
-| `valence` | dataset column | TF-Hub VGGish embedding + gradient-boosted trees, trained on Kaggle precomputed embeddings |
+| `valence` | dataset column | VGGish + PANNs-PCA embeddings → gradient-boosted regression head, trained on Kaggle precomputed embeddings |
 | `spectral_centroid` | *not used* | Librosa (extra descriptor, demo-only) |
 | `lyric_sentiment` | VADER compound score on `lyrics` | VADER compound score on submitted lyrics (optional input) |
-| `valence_normalized` | computed: `(2 * valence) - 1` | computed the same way, from the VGGish-Ridge `valence` estimate |
+| `valence_normalized` | computed: `(2 * valence) - 1` | computed the same way, from the estimated `valence` |
 | `alignment_gap` | computed: `lyric_sentiment - valence_normalized` | same formula — only present if lyrics were submitted |
 
-All twelve Spotify audio descriptors are now estimated by Pipeline 2, at
-three different tiers of confidence: `tempo`/`key`/`mode`/`duration_ms`/
-`loudness` are real, established DSP techniques (not proxies);
-`valence`/`acousticness`/`instrumentalness`/`danceability`/`energy`/
-`speechiness` are Ridge regressions fit directly against real Spotify
-values (see "Valence, acousticness, instrumentalness" below); `liveness` is
-the one remaining hand-built proxy (a general-purpose audio tagger
-repurposed for this, not fit against real Spotify values). See
-[Known limitations](#known-limitations--open-items) and "Real-song
-validation" below for actual measured accuracy, not just which tier a
-feature is in.
+All twelve Spotify audio descriptors are now estimated by Pipeline 2, in
+two tiers: `tempo`/`key`/`mode`/`duration_ms` are real, established DSP
+techniques (not proxies); `valence`/`acousticness`/`instrumentalness`/
+`danceability`/`energy`/`speechiness`/`loudness`/`liveness` are
+gradient-boosted regression heads fit directly against real Spotify values
+(see "Regression heads" below). No hand-built proxy remains — `liveness`
+was the last one. See [Known limitations](#known-limitations--open-items)
+and "Real-song validation" below for actual measured accuracy, not just
+which tier a feature is in.
 
 ### Source legend
 
@@ -184,7 +183,6 @@ produces zero-valued (not `NaN`, not crashed) downstream features.
 
 | Feature | Method |
 |---|---|
-| `energy` | Hand-weighted composite, **not** raw RMS — see below |
 | `tempo` | onset-strength autocorrelation (`librosa.onset.onset_strength` → `librosa.feature.rhythm.tempo`) |
 | `spectral_centroid` | `librosa.feature.spectral_centroid`, averaged across frames |
 | `duration_ms` | `len(y) / sr * 1000` — arithmetic, not extraction |
@@ -246,8 +244,8 @@ reading per uploaded song), even though it's a better aggregate statistic.
 energy (all regression-based estimates, not real DSP), key detection has an
 established, well-understood technique: average the track's chroma (12-bin pitch-class
 energy, `librosa.feature.chroma_cqt`) over time, then correlate that against
-24 candidate profiles (the empirically-measured Krumhansl-Kessler major/minor
-key profiles, each of the 12 possible tonics) and take the best match. Both
+24 candidate profiles (Temperley's 1999 major/minor key profiles — the same
+values Essentia ships as "temperley" — at each of the 12 possible tonics) and take the best match. Both
 `key` (0=C, 1=C#/Db, ..., 11=B) and `mode` (1=major, 0=minor) come from
 whichever of the 24 wins — `librosa`'s chroma index convention already
 matches Spotify's key encoding, so no reindexing is needed. Verified against
@@ -258,16 +256,32 @@ than a clean triad, so treat this as reliable-ish rather than exact — it's
 the standard technique for this exact task, not a regression estimate like
 speechiness/danceability/valence.
 
+The profiles were originally Krumhansl-Kessler (1990); Temperley replaced
+them after both were scored against 66 real songs (via the validation
+feature cache): exact key+mode 0.36 → 0.47, tonic 0.38 → 0.48, MIREX
+weighted score 0.530 → 0.602, consistent across three chroma variants
+(`chroma_cqt`, harmonic-only CQT, CENS). End-to-end: key 0.485, mode 0.667,
+key+mode exact 0.470. Mode alone stays weak for every profile tried
+(0.64–0.71), below the 0.742 you'd get by always answering "major"; a
+VGGish-embedding mode classifier trained on 491k real labels scored 0.667
+on the real songs and wasn't adopted either.
+A bass-register tiebreak for relative major/minor swaps (10 of the 22 mode
+errors) was tested too and didn't help beyond noise (mode 0.682 at best,
+`scripts/calibration/relative_key_experiment.py`). Instead,
+`estimate_key` also returns the runner-up key/mode and `key_confidence`
+(winning minus runner-up correlation); below `LOW_KEY_CONFIDENCE_MARGIN`
+(0.10) mode was right 0.61 of the time vs 0.73 above it, and the demo
+visualizer shows a low-confidence note naming the runner-up.
+
 **`energy`** used to be a hand-weighted Librosa composite here (50% RMS
 loudness, 30% spectral brightness, 20% onset density, weights never fit
 against real data) — real-song validation showed a VGGish-embedding Ridge
 regression against real Spotify energy clearly beats it (corr 0.570 →
-0.916). It's computed by `api.pipelines.demo.vggish_tfhub` now; see the
-"Real-song validation" section above for the numbers and
-`feature_extraction.md`'s Valence/acousticness/instrumentalness section for
-how the VGGish-Ridge approach works.
+0.916, now 0.925). It's computed by `api.pipelines.demo.regression_heads`
+now; see "Regression heads" below for how, and "Real-song validation"
+for the numbers.
 
-### Speechiness (moved to `vggish_tfhub.py`)
+### Speechiness (moved to `regression_heads.py`)
 
 Speechiness used to be a from-scratch proxy here: four hand-picked
 low-level features (zero-crossing-rate variance, spectral-flatness
@@ -294,29 +308,33 @@ synthetic-calibration sub-system (the four scripts above, `speechiness.py`,
 removed rather than kept alongside — it had no remaining purpose once real
 Spotify data was available to fit against directly.
 
-### Liveness proxy (`liveness_panns.py`)
+### PANNs embedding (`panns_embedding.py`) — liveness's old proxy, replaced
 
-Liveness estimates "was this recorded with an audience present," which has
-no DSP shortcut. Approximated with **PANNs CNN14**
-(`panns-inference` package, AudioSet-pretrained, checkpoint
-`Cnn14_mAP=0.431.pth`, 327MB, MD5 `541141fa2ee191a88f24a3219fff024e`): the
-model tags the clip against AudioSet's ~527 classes, and `liveness` is the
-mean predicted probability across the classes whose labels contain
-`applause`, `cheering`, or `crowd` (case-insensitive substring match
-against PANNs' label list, so a labeling change upstream doesn't silently
-start scoring zero classes — it raises instead). Audio is resampled to
-32kHz (the rate CNN14 was trained on) if needed.
+`liveness` used to be a hand-built proxy here: PANNs CNN14 tagged the clip
+against AudioSet's 527 classes and `liveness` was the mean probability
+over the `applause`/`cheering`/`crowd` classes. Real-song validation showed
+it was on the wrong scale entirely — prediction std 0.008 against real
+Spotify liveness std 0.200, MAE 0.224 — so it was replaced by a regression
+head (see "Regression heads" below; MAE 0.088, corr 0.772). A VGGish-only
+liveness head was also tried earlier and rejected; adding PANNs is what
+made the difference.
 
-The checkpoint is not bundled — download it from the
-[PANNs release on Zenodo](https://zenodo.org/records/3987831) (direct link:
-`https://zenodo.org/records/3987831/files/Cnn14_mAP=0.431.pth?download=1`)
-and pass its path via `extract_liveness(y, sr, checkpoint_path=...)`, or let
-`panns_inference` auto-download it to `~/panns_data/` on first use.
+The module now just returns CNN14's 2048-dim penultimate embedding
+(`extract_panns_embedding(y, sr, checkpoint_path=...)`), resampling to
+32kHz (the rate CNN14 was trained on) if needed. That embedding feeds
+*every* regression head, not only liveness. Checkpoint:
+`Cnn14_mAP=0.431.pth`, 327MB, MD5 `541141fa2ee191a88f24a3219fff024e`, from
+the [PANNs release on Zenodo](https://zenodo.org/records/3987831) (direct
+link: `https://zenodo.org/records/3987831/files/Cnn14_mAP=0.431.pth?download=1`),
+or let `panns_inference` auto-download it to `~/panns_data/`. Locally
+computed embeddings match the Kaggle dataset's precomputed ones closely
+(mean cosine similarity 0.961 over the 66 validation songs), which is what
+lets heads trained on Kaggle embeddings transfer.
 
 **Windows caveat:** `panns_inference` itself (not the model) shells out to
 `wget` on first import to fetch a small AudioSet label CSV. `wget` isn't a
 standard Windows command, so a fresh install fails there with a raw
-`FileNotFoundError` — `_load_model()` in `liveness_panns.py` catches that
+`FileNotFoundError` — `_load_model()` in `panns_embedding.py` catches that
 broadly (not just `ImportError`) so it still fails with a clear message
 rather than a confusing stack trace. Works without issue under WSL2, where
 `wget` is present.
@@ -354,7 +372,7 @@ it didn't need a regression) and turned out to have much more headroom
 than assumed: VGGish + gradient-boosted trees reached **0.832** end-to-end,
 a bigger jump than the sign-bug fix itself.
 
-### Valence, acousticness, instrumentalness (`vggish_tfhub.py`)
+### VGGish embedding (`vggish_tfhub.py`)
 
 These three used to be Essentia MusiCNN model heads, living in
 `essentia_features.py` alongside danceability/loudness. They aren't
@@ -385,49 +403,61 @@ run as an **isolated subprocess**, never imported into the same process as
    architecture diagnosis was correct, and switching embedding sources
    fixes it.
 
-So `vggish_tfhub.py` loads `tfhub.dev/google/vggish/1`, computes a
+So `vggish_tfhub.py` loads `tfhub.dev/google/vggish/1` and computes a
 mean-pooled 128-dim embedding via `librosa`-loaded audio (16kHz mono, no
-Essentia in this process at all), and feeds it to seven regression models
-— `models/vggish_ridge/{valence,acousticness,instrumentalness,danceability,
-energy,speechiness,loudness}.joblib` — trained on the Kaggle dataset's
-precomputed VGGish embeddings against the real Spotify target columns (see
-`scripts/train_vggish_ridge.py`). Not all seven use the same model class —
-`load_ridge_models`/`predict_vggish_features` don't care, they just call
-`.predict()` on whatever `joblib.load` returns. It's a plain script,
-importable and runnable standalone:
+Essentia in this process at all). That's all it does — it prints the
+embedding as a JSON list on its last stdout line and exits:
 
 ```
-uv run python -m api.pipelines.demo.vggish_tfhub <audio_path> [--models-dir <dir>]
+uv run python -m api.pipelines.demo.vggish_tfhub <audio_path>
 ```
 
-`pipeline.py`'s orchestrator calls it with `subprocess.run([sys.executable,
+`pipeline.py`'s orchestrator runs it with `subprocess.run([sys.executable,
 "-m", "api.pipelines.demo.vggish_tfhub", ...])` rather than importing it
-directly — the same isolation the crash above requires, just automated
-instead of manual. This means every demo request now spawns two Python
-processes inside the outer WSL2 subprocess (the main pipeline process, plus
-this one) — a second TensorFlow runtime load per request, and the first
-request after a cold start also pays for a one-time ~280MB VGGish module
-download (cached afterward under `models/tfhub_cache/`, set via
-`TFHUB_CACHE_DIR`). `demo_pipeline_timeout_seconds` was bumped from 120s to
-180s to give this room.
+directly — the same isolation the crash above requires, just automated.
+Every demo request therefore spawns two Python processes inside the outer
+WSL2 subprocess — a second TensorFlow runtime load per request, and the
+first request after a cold start also pays for a one-time ~280MB VGGish
+module download (cached afterward under `models/tfhub_cache/`, set via
+`TFHUB_CACHE_DIR`). `demo_pipeline_timeout_seconds` is 180s to give this
+room.
 
-**Training the Ridge models** (one-time, from WSL2):
+### Regression heads (`regression_heads.py`)
+
+Eight targets — `valence`, `acousticness`, `danceability`, `energy`,
+`speechiness`, `instrumentalness`, `loudness`, `liveness` — each get one
+`HistGradientBoostingRegressor` on the same 384-dim feature vector: the
+VGGish embedding (128) concatenated with the PANNs embedding compressed to
+256 dims by an IncrementalPCA (99.0% explained variance). Bounded targets
+are clipped to `[0, 1]`; `loudness` (dB) isn't. Models live at
+`models/regression_heads/<target>.joblib`, the PCA at
+`models/panns/panns_pca256.joblib`.
+
+How it got here, each step checked against the 66 real songs, not just
+held-out Kaggle rows: Ridge heads on VGGish → GBM for every target (fixed
+Ridge's shrinkage toward the mean on extreme values) → more capacity
+(`max_iter=5000`, `learning_rate=0.1`, `max_leaf_nodes=63`, early stopping
+with 50-round patience; all eight converged before the cap) → PANNs added
+as a second embedding (held-out valence corr 0.817 → 0.830, and the only
+thing that made a liveness head work). Two things were tried and **not**
+adopted: a VGGish-guided tempo octave choice (corr 0.182 → 0.142) and a
+VGGish mode classifier (see key/mode above).
+
+**Training** (one-time, from WSL2, in this order):
 
 ```
-uv run python scripts/train_vggish_ridge.py \
-    data/kaggle_embeddings/vggish_embeddings.npz \
-    "/mnt/c/Users/User/Downloads/songs(1).csv"
+uv run python scripts/build_panns_pca.py
+uv run python scripts/train_vggish_ridge.py "/mnt/c/Users/User/Downloads/songs(1).csv"
 ```
 
-Fits each target's model (per `_TARGET_MODELS` — `StandardScaler ->
-RidgeCV` for instrumentalness/energy/speechiness,
-`HistGradientBoostingRegressor` for valence/acousticness/danceability/
-loudness) on an 80/20 split, prints held-out R²/correlation, and writes the
-seven `.joblib` files. Uses the *same* embedding source
-(`vggish_embeddings.npz`) `vggish_tfhub.py` matches at inference time —
-that match is the entire point; retraining against a different embedding
-source (e.g. Essentia's own VGGish) would reintroduce the exact mismatch
-described above.
+`build_panns_pca.py` streams the ~4GB compressed PANNs `.npz` chunk by
+chunk (it can't be memory-mapped, and loading it whole has OOM'd WSL2) and
+writes `data/kaggle_embeddings/panns_pca256.npz` plus the fitted PCA.
+`train_vggish_ridge.py` (the name is historical) fits all eight heads on
+an 80/20 split, prints held-out R²/correlation, and — if
+`data/validation_songs/feature_cache.npz` exists — also scores them on the
+real validation songs. Both use the *same* embedding sources the live
+pipeline reproduces at inference time; that match is the entire point.
 
 ### Lyric sentiment + alignment gap (`lyric_sentiment.py`, `alignment.py`)
 
@@ -438,7 +468,7 @@ capitalization/punctuation are deliberately left alone), copied rather
 than imported per the never-mix rule. `alignment.py` is the identical
 `alignment_gap = lyric_sentiment - valence_normalized` formula — the only
 real difference from Pipeline 1 is *where `valence` comes from*: Pipeline 1
-reads it from the Spotify dataset, Pipeline 2 uses the VGGish-Ridge
+reads it from the Spotify dataset, Pipeline 2 uses the
 demo-estimated `valence` (already in `[0, 1]`, see above), since there's no
 real Spotify value for a song Spotify has never scored.
 
@@ -455,7 +485,7 @@ features = extract_demo_features(
     "uploaded_song.wav",
     lyrics="paste the song's lyrics here (optional)",
     panns_checkpoint="models/panns/Cnn14_mAP=0.431.pth",
-    vggish_ridge_models_dir="models/vggish_ridge",
+    regression_heads_dir="models/regression_heads",
 )
 ```
 
@@ -506,13 +536,14 @@ structure. Edge cases covered per the thesis's requirements:
   (e.g. Windows), calling `extract_loudness` directly still raises a
   `RuntimeError` naming WSL2 as the fix, instead of an `ImportError` stack
   trace; skipped automatically on a machine where Essentia *is* installed.
-- **`vggish_tfhub.py`'s regression-model glue** — `predict_vggish_features`/
-  `load_ridge_models` are tested with a mocked embedding and tiny
-  constant-output Ridge models (`tests/pipelines/demo/test_vggish_tfhub.py`),
-  not a real TF-Hub download — that part was validated manually instead
-  (see the correlation numbers in the "Valence, acousticness,
-  instrumentalness" section above), same reasoning as the PANNs/Essentia
-  checkpoints not being downloaded in CI.
+- **Regression-head glue** — `regression_heads.py` is tested with tiny
+  fitted PCA + constant-output models (`tests/pipelines/demo/test_regression_heads.py`:
+  feature shape, `[0, 1]` clipping, missing-model error), and
+  `panns_embedding.py` with a fake model (`test_panns_embedding.py`:
+  embedding shape, resampling, broken-import error) — not real TF-Hub/PANNs
+  downloads. Those were validated end-to-end instead (see "Real-song
+  validation" below), same reasoning as checkpoints not being downloaded
+  in CI.
 
 Run everything with:
 
@@ -524,8 +555,8 @@ Essentia's guard-path test exercises the Windows fallback there and
 self-skips under WSL2 (where Essentia *is* installed), same as always,
 even though `essentia_features.py` isn't in the production call path
 anymore. Verified live under WSL2 too, not just by the test suite:
-`api.pipelines.demo.vggish_tfhub` (all seven targets, including loudness
-now) ran successfully against real audio files (66 of them, per the
+the full pipeline (VGGish subprocess + PANNs + all eight regression
+heads) ran successfully against real audio files (66 of them, per the
 "Real-song validation" section above), and the Windows-side Librosa
 extractors ran against a real audio file as well.
 
@@ -555,15 +586,13 @@ extractors ran against a real audio file as well.
    mkdir -p models/panns
    curl -sSL -o "models/panns/Cnn14_mAP=0.431.pth" "https://zenodo.org/records/3987831/files/Cnn14_mAP=0.431.pth?download=1"
 
-   # Ridge models (valence/acousticness/instrumentalness/danceability/
-   # energy/speechiness) — one-time training, see the "Valence,
-   # acousticness, instrumentalness" section above.
-   uv run python scripts/train_vggish_ridge.py \
-     data/kaggle_embeddings/vggish_embeddings.npz "/mnt/c/Users/User/Downloads/songs(1).csv"
+   # Regression heads — one-time training, see "Regression heads" above.
+   uv run python scripts/build_panns_pca.py
+   uv run python scripts/train_vggish_ridge.py "/mnt/c/Users/User/Downloads/songs(1).csv"
 
    uv run python -m api.pipelines.demo.pipeline path/to/song.wav \
      --panns-checkpoint "models/panns/Cnn14_mAP=0.431.pth" \
-     --vggish-ridge-models-dir models/vggish_ridge
+     --regression-heads-dir models/regression_heads
    ```
 
 4. **Tests** (Windows or WSL2 — both work; Essentia's tests self-skip on
@@ -588,20 +617,34 @@ single manually-sourced Glue Song test was doing, just at n=18 instead of
 n=1, and reproducible.
 
 Current numbers (n=66, random sample, `random_state=42`, grown from an
-initial n=18 batch — see below for why the growth itself matters):
+initial n=18 batch — see below for why the growth itself matters), from
+the VGGish + PANNs GBM heads; "before" is the previous VGGish-only GBM
+round:
 
-| Feature | MAE | corr | Read |
-|---|---|---|---|
-| energy | 0.075 | 0.916 | strong — VGGish-GBM, replaced the old hand-weighted composite (was 0.570) |
-| duration_ms | 2974 ms | 0.994 | arithmetic, expected near-perfect |
-| acousticness | 0.074 | 0.875 | strong — VGGish-GBM, replaced VGGish-Ridge (was 0.858) |
-| danceability | 0.091 | 0.726 | strong — VGGish-GBM, replaced Essentia's DFA algorithm (was 0.353) |
-| valence | 0.121 | 0.747 | strong — VGGish-GBM, replaced VGGish-Ridge (was 0.712) |
-| speechiness | 0.034 | 0.709 | strong — VGGish-Ridge, replaced a synthetic-TTS-calibrated regression (was 0.206) |
-| **loudness** | **1.65 dB** | **0.832** | strong — VGGish-GBM, replaced Essentia `ReplayGain` (was 0.605) — the single biggest win of this round |
-| liveness | 0.224 | 0.694 | moderate — see caveat below |
-| instrumentalness | 0.132 | 0.645 | moderate |
-| tempo | 20.8 BPM | 0.182 | weak, but see below — mostly octave confusion (half/double tempo), not bad periodicity detection |
+| Feature | MAE | corr | before (MAE / corr) | Read |
+|---|---|---|---|---|
+| energy | 0.063 | 0.925 | 0.067 / 0.918 | strong |
+| acousticness | 0.064 | 0.923 | 0.074 / 0.875 | strong |
+| duration_ms | 2974 ms | 0.994 | same | arithmetic, expected near-perfect |
+| loudness | 1.65 dB | 0.845 | 1.65 dB / 0.832 | strong |
+| instrumentalness | 0.085 | 0.813 | 0.099 / 0.714 | strong — biggest correlation gain this round |
+| danceability | 0.082 | 0.781 | 0.091 / 0.726 | strong |
+| valence | 0.110 | 0.779 | 0.121 / 0.747 | strong |
+| speechiness | 0.029 | 0.774 | 0.029 / 0.757 | strong |
+| liveness | 0.088 | 0.772 | 0.224 / 0.694 | strong — was a crowd-noise heuristic on the wrong scale, now a regression head |
+| tempo | 20.8 BPM | 0.182 | same | weak, but see below — mostly octave confusion (half/double tempo), not bad periodicity detection |
+| key | — | acc 0.485 | ~0.38 | Temperley profiles, replaced Krumhansl-Kessler |
+| mode | — | acc 0.667 | 0.71 | weak — below the always-major baseline (0.742) |
+| key+mode exact | — | acc 0.470 | 0.36 | |
+
+Exact replication isn't a realistic target: Spotify's values come from a
+proprietary model run on their masters, while these songs are
+YouTube-sourced audio. The goal is getting close to that noise ceiling,
+and each change above was only kept if it improved the real-song numbers,
+not just held-out Kaggle ones. Per-song values are written to
+`data/validation_songs/per_song_results.csv`; the per-song intermediate
+features are cached in `data/validation_songs/feature_cache.npz` so
+calibration experiments don't need the ~70-min full pipeline pass.
 
 **Danceability, energy, and speechiness were all re-fit the same way
 valence/acousticness/instrumentalness were** — a VGGish-embedding Ridge
@@ -631,7 +674,7 @@ VGGish (Ridge *or* GBM) was tried for the first time in this round — it had
 never been attempted before, on the assumption Essentia's `ReplayGain` (a
 real DSP measurement) didn't need it — and even plain Ridge (0.796 held-out
 corr) blew past Essentia's fitted-constant approach (0.605 real-song corr).
-`scripts/train_vggish_ridge.py`'s `_TARGET_MODELS` now maps each target to
+At the time, `scripts/train_vggish_ridge.py`'s `_TARGET_MODELS` mapped each target to
 its own model class explicitly (GBM for valence/acousticness/danceability/
 loudness, Ridge for instrumentalness/energy/speechiness — untested with GBM,
 not assumed to benefit). Confirmed end-to-end, not just held-out: loudness
@@ -689,7 +732,7 @@ related to actual loudness (corr was **-0.52** before the fix) — the fix
 actually *improved* at n=66 (0.521 → 0.605) and the reference constant
 barely moved on refit (-19.686 → -19.541). (This whole Essentia-based
 approach was later replaced entirely by VGGish-GBM, corr 0.605 → 0.832 —
-see "Real-song validation" below; kept here as the historical record of why
+see above; kept here as the historical record of why
 the sign bug happened and how it was diagnosed.) `tempo`'s estimator was
 collapsing onto its internal ~120 BPM prior (corr **0.025** with the
 default) — loosening it is a real, replicated improvement over the default
@@ -702,19 +745,22 @@ is — narrowing a failure mode isn't the same as fixing it.
 ## Known limitations / open items
 
 - **Validation status by feature**, current as of the n=66 real-song run
-  above: `loudness`/`energy`/`acousticness`/`danceability`/`valence`/
-  `speechiness` are strong; `liveness`/`instrumentalness` are moderate;
-  `tempo` is weak on a raw correlation basis (0.182), but a follow-up octave-tolerant
-  analysis showed most of that error is half/double-tempo confusion, not
-  bad periodicity detection (0.939 correlation once octave errors are
-  credited) — a real, general MIR problem with no ground-truth-free fix
-  found yet, not a simple bug (see the "Tempo" section above); `duration_ms`
-  is arithmetic and reliably correct; `key`/`mode` have no real-song
-  accuracy check yet (categorical, doesn't fit the MAE/correlation approach
-  above — would need per-song correctness scoring instead). Held-out
-  R²/correlation for the seven VGGish-embedding targets specifically
-  (embedding vs. real Spotify columns, not end-to-end pipeline output, and
-  not all the same model class — see `_TARGET_MODELS`) is printed by
+  above: all eight regression-head targets (`energy`/`acousticness`/
+  `loudness`/`instrumentalness`/`danceability`/`valence`/`speechiness`/
+  `liveness`) are strong, corr 0.77–0.93; `duration_ms` is arithmetic and
+  reliably correct; `key` is right about half the time (0.485) and `mode`
+  is weak (0.667, below always-major); `tempo` is weak on a raw correlation
+  basis (0.182), but a follow-up octave-tolerant analysis showed most of
+  that error is half/double-tempo confusion, not bad periodicity detection
+  (0.939 correlation once octave errors are credited) — a real, general MIR
+  problem with no ground-truth-free fix found yet (a VGGish-guided octave
+  pick was tried and made it worse, 0.182 → 0.142; see the "Tempo" section
+  above). A final probe with the Kaggle MERT embeddings (a music-specific
+  model) didn't change this: held-out mode 0.681 vs a 0.674 always-major
+  baseline, key+mode exact 0.450, tempo right-octave only 84.5% — see
+  [docs/feature_extraction_calibration.md](docs/feature_extraction_calibration.md)
+  section 7. Held-out R²/correlation for the regression heads (embedding vs.
+  real Spotify columns, not end-to-end output) is printed by
   `scripts/train_vggish_ridge.py` — check it directly rather than trusting a
   number from an older conversation, since it drifts as the dataset or
   split changes.

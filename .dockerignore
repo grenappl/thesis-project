@@ -1,0 +1,7 @@
+# The calibration image only needs the dependency spec; code and data are
+# bind-mounted at run time. Keeping the build context tiny matters: data/
+# and models/ are several GB.
+*
+!pyproject.toml
+!uv.lock
+!.python-version

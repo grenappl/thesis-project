@@ -4,6 +4,7 @@ import pytest
 from api.pipelines.demo.audio_io import load_audio
 from api.pipelines.demo.librosa_features import (
     extract_duration_ms,
+    estimate_key,
     extract_key_and_mode,
     extract_librosa_features,
     extract_spectral_centroid,
@@ -28,6 +29,7 @@ def test_extract_features_on_tone(tone_wav):
     assert features["duration_ms"] > 0
     assert 0 <= features["key"] <= 11
     assert features["mode"] in (0, 1)
+    assert features["key_confidence"] >= 0
 
 
 def test_duration_ms_matches_clip_length():
@@ -66,3 +68,16 @@ def test_silent_audio_spectral_centroid_does_not_crash(silent_wav):
     y, sr = load_audio(silent_wav)
     centroid = extract_spectral_centroid(y, sr)
     assert centroid == 0.0
+
+
+def test_estimate_key_reports_runner_up_and_margin():
+    y, sr = _chord_wav([261.63, 329.63, 392.00])  # C4, E4, G4
+    estimate = estimate_key(y, sr)
+    assert (estimate["key"], estimate["mode"]) == (0, 1)
+    assert (estimate["key_alternative"], estimate["mode_alternative"]) != (0, 1)
+    assert estimate["key_confidence"] > 0
+
+
+def test_estimate_key_zero_confidence_on_silence(silent_wav):
+    y, sr = load_audio(silent_wav)
+    assert estimate_key(y, sr)["key_confidence"] == 0.0

@@ -64,7 +64,7 @@
     ]
   },
   "hyperparameter_robustness": {
-    "direction_preserved": true,
+    "direction_preserved": false,
     "settings": [
       {
         "setting": "selected (frozen)",
@@ -74,11 +74,11 @@
         "delta_r2": -0.000419
       },
       {
-        "setting": "shallower, slower",
-        "params": "{\"max_depth\": 4, \"learning_rate\": 0.05}",
-        "control_r2": 0.06825,
-        "alignment_augmented_r2": 0.067831,
-        "delta_r2": -0.000419
+        "setting": "deeper, slower",
+        "params": "{\"max_depth\": 6, \"learning_rate\": 0.01}",
+        "control_r2": 0.067536,
+        "alignment_augmented_r2": 0.067841,
+        "delta_r2": 0.000306
       },
       {
         "setting": "deeper, faster",

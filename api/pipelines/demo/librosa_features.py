@@ -5,9 +5,9 @@ Librosa. Runs natively on Windows.
 
 Energy used to live here too (a hand-weighted RMS/brightness/onset-density
 composite, never fit against real data) — real-song validation
-(scripts/validate_pipeline_accuracy.py) showed a VGGish-embedding Ridge
-regression against real Spotify energy beats it. It's now computed by
-api.pipelines.demo.vggish_tfhub — see feature_extraction.md's "Real-song
+(scripts/validate_pipeline_accuracy.py) showed an embedding-based
+regression against real Spotify energy beats it. It is now computed by
+api.pipelines.demo.regression_heads — see feature_extraction.md, "Real-song
 validation" section.
 """
 
@@ -17,17 +17,18 @@ import numpy as np
 import librosa
 from librosa.feature.rhythm import tempo as _librosa_tempo
 
-# Krumhansl-Kessler key profiles (Krumhansl, 1990) — empirically measured
-# perceived "fit" of each pitch class to a major/minor tonic. Index 0 is the
-# tonic itself (highest weight); index i is the pitch class i semitones above
-# the tonic. Matches librosa's chroma convention (index 0 = C) and Spotify's
-# key encoding (0=C, 1=C#/Db, ..., 11=B), so no reindexing is needed.
-_MAJOR_KEY_PROFILE = np.array(
-    [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
-)
-_MINOR_KEY_PROFILE = np.array(
-    [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
-)
+# Temperley (1999) key profiles — the same values Essentia ships as its
+# "temperley" key profile. Index 0 is the tonic; index i is the pitch class
+# i semitones above it. Matches librosa's chroma convention (index 0 = C)
+# and Spotify's key encoding (0=C, ..., 11=B), so no reindexing is needed.
+# Replaced Krumhansl-Kessler (1990) after checking both against 66 real
+# songs: exact key+mode 0.36 -> 0.47, tonic 0.38 -> 0.48, MIREX weighted
+# score 0.530 -> 0.602 — consistent across three chroma variants, not one
+# lucky configuration. Mode alone is weak for every profile tried (0.64-0.71,
+# below the 0.74 you'd get by always answering "major"); a VGGish mode
+# classifier trained on 491k real labels didn't beat that either.
+_MAJOR_KEY_PROFILE = np.array([5.0, 2.0, 3.5, 2.0, 4.5, 4.0, 2.0, 4.5, 2.0, 3.5, 1.5, 4.0])
+_MINOR_KEY_PROFILE = np.array([5.0, 2.0, 3.5, 4.5, 2.0, 4.0, 2.0, 4.5, 3.5, 2.0, 1.5, 4.0])
 
 
 _TEMPO_STD_BPM = 1.5  # librosa's default (1.0) makes the tempo estimate hug
@@ -71,42 +72,64 @@ def extract_duration_ms(y: np.ndarray, sr: int) -> float:
     return float(len(y) / sr * 1000.0)
 
 
-def extract_key_and_mode(y: np.ndarray, sr: int) -> tuple[int, int]:
+# Winning-profile correlation minus the runner-up's. On the 66 validation
+# songs, mode was right 0.73 of the time when the margin was at or above the
+# median (~0.10) and 0.61 below it, so a small margin is a real, useful "not
+# sure" signal. The runner-up is very often the relative major/minor (same
+# notes, different home note): 10 of the 22 mode errors were exactly that
+# swap. Resolving it from the bass register was tried and didn't help (mode
+# 0.667 -> 0.682 at best, below always-major 0.742) — see
+# scripts/calibration/relative_key_experiment.py.
+LOW_KEY_CONFIDENCE_MARGIN = 0.10
+
+
+def estimate_key(y: np.ndarray, sr: int) -> dict[str, float]:
     """Musical key (0=C, 1=C#/Db, ..., 11=B) and mode (1=major, 0=minor) via
-    chroma-profile correlation — the standard Krumhansl-Schmuckler technique:
-    average the track's pitch-class energy (chroma) over time, then find
-    which of the 24 major/minor key profiles it correlates with best.
+    chroma-profile correlation — the standard Krumhansl-Schmuckler technique
+    (with Temperley's profiles, see above): average the track's pitch-class
+    energy (chroma) over time, then find which of the 24 major/minor key
+    profiles it correlates with best.
+
+    Also returns the runner-up profile (`key_alternative`/`mode_alternative`)
+    and `key_confidence`, the correlation margin between the two (see
+    `LOW_KEY_CONFIDENCE_MARGIN`).
 
     Silence (zero-variance chroma, correlation undefined) defaults to
-    (key=0, mode=1) rather than raising or returning NaN.
+    C major with zero confidence rather than raising or returning NaN.
     """
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
     chroma_mean = chroma.mean(axis=1)
 
     if np.std(chroma_mean) == 0:
-        return 0, 1
+        return {"key": 0, "mode": 1, "key_alternative": 9, "mode_alternative": 0, "key_confidence": 0.0}
 
-    best_score = -np.inf
-    best_key = 0
-    best_mode = 1
-    for mode, profile in ((1, _MAJOR_KEY_PROFILE), (0, _MINOR_KEY_PROFILE)):
-        for tonic in range(12):
-            rotated = np.roll(profile, tonic)
-            score = float(np.corrcoef(chroma_mean, rotated)[0, 1])
-            if score > best_score:
-                best_score = score
-                best_key = tonic
-                best_mode = mode
+    candidates = sorted(
+        (
+            (float(np.corrcoef(chroma_mean, np.roll(profile, tonic))[0, 1]), tonic, mode)
+            for mode, profile in ((1, _MAJOR_KEY_PROFILE), (0, _MINOR_KEY_PROFILE))
+            for tonic in range(12)
+        ),
+        reverse=True,
+    )
+    (best_score, key, mode), (second_score, alt_key, alt_mode) = candidates[0], candidates[1]
+    return {
+        "key": key,
+        "mode": mode,
+        "key_alternative": alt_key,
+        "mode_alternative": alt_mode,
+        "key_confidence": best_score - second_score,
+    }
 
-    return best_key, best_mode
+
+def extract_key_and_mode(y: np.ndarray, sr: int) -> tuple[int, int]:
+    estimate = estimate_key(y, sr)
+    return estimate["key"], estimate["mode"]
 
 
 def extract_librosa_features(y: np.ndarray, sr: int) -> dict[str, float]:
-    key, mode = extract_key_and_mode(y, sr)
     return {
         "tempo": extract_tempo(y, sr),
         "spectral_centroid": extract_spectral_centroid(y, sr),
         "duration_ms": extract_duration_ms(y, sr),
-        "key": key,
-        "mode": mode,
+        **estimate_key(y, sr),
     }

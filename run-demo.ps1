@@ -53,13 +53,15 @@ if ($distros -contains $distroName) {
 Write-Host ""
 Write-Host "  Model checkpoints (feature_extraction.md has download commands):"
 Test-ModelFile "models\panns\Cnn14_mAP=0.431.pth" | Out-Null
-Test-ModelFile "models\vggish_ridge\valence.joblib" | Out-Null
-Test-ModelFile "models\vggish_ridge\acousticness.joblib" | Out-Null
-Test-ModelFile "models\vggish_ridge\instrumentalness.joblib" | Out-Null
-Test-ModelFile "models\vggish_ridge\danceability.joblib" | Out-Null
-Test-ModelFile "models\vggish_ridge\energy.joblib" | Out-Null
-Test-ModelFile "models\vggish_ridge\speechiness.joblib" | Out-Null
-Test-ModelFile "models\vggish_ridge\loudness.joblib" | Out-Null
+Test-ModelFile "models\panns\panns_pca256.joblib" | Out-Null
+Test-ModelFile "models\regression_heads\valence.joblib" | Out-Null
+Test-ModelFile "models\regression_heads\acousticness.joblib" | Out-Null
+Test-ModelFile "models\regression_heads\danceability.joblib" | Out-Null
+Test-ModelFile "models\regression_heads\energy.joblib" | Out-Null
+Test-ModelFile "models\regression_heads\speechiness.joblib" | Out-Null
+Test-ModelFile "models\regression_heads\instrumentalness.joblib" | Out-Null
+Test-ModelFile "models\regression_heads\loudness.joblib" | Out-Null
+Test-ModelFile "models\regression_heads\liveness.joblib" | Out-Null
 
 Write-Host ""
 Write-Host "== Starting servers (this terminal, Ctrl+C to stop both) ==" -ForegroundColor Cyan

@@ -81,7 +81,7 @@ class DemoFeatureExtractionService:
             "uv run python -m api.pipelines.demo.pipeline "
             f"{shlex.quote(relative_audio_path)} "
             f"--panns-checkpoint {shlex.quote(settings.demo_panns_checkpoint)} "
-            f"--vggish-ridge-models-dir {shlex.quote(settings.demo_vggish_ridge_models_dir)}"
+            f"--regression-heads-dir {shlex.quote(settings.demo_regression_heads_dir)}"
         )
         if lyrics_path is not None:
             relative_lyrics_path = lyrics_path.relative_to(_PROJECT_ROOT).as_posix()

@@ -3,7 +3,7 @@
 real Spotify values, printing per-feature MAE and correlation across the
 batch — a less noisy read than the single manually-sourced Glue Song test.
 
-Must run under WSL2 (Pipeline 2 needs Essentia):
+Must run under WSL2 or the GPU calibration container (PANNs needs Linux):
 
     uv run python scripts/validate_pipeline_accuracy.py
 """
@@ -28,7 +28,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--validation-dir", default="data/validation_songs")
     parser.add_argument("--panns-checkpoint", default="models/panns/Cnn14_mAP=0.431.pth")
-    parser.add_argument("--vggish-ridge-models-dir", default="models/vggish_ridge")
+    parser.add_argument("--regression-heads-dir", default="models/regression_heads")
     parser.add_argument("--per-song-csv", default=None, help="Optional path to dump per-song real vs predicted values")
     args = parser.parse_args()
 
@@ -47,7 +47,7 @@ def main() -> None:
             features = extract_demo_features(
                 audio_path,
                 panns_checkpoint=args.panns_checkpoint,
-                vggish_ridge_models_dir=args.vggish_ridge_models_dir,
+                regression_heads_dir=args.regression_heads_dir,
             )
         except Exception as exc:  # keep going — one bad file shouldn't kill the whole batch
             print(f"  failed: {exc}")
@@ -65,8 +65,17 @@ def main() -> None:
         corr = np.corrcoef(real, predicted_col)[0, 1] if len(real) > 1 else float("nan")
         print(f"{feature}: MAE={mae:.4f} corr={corr:.3f}")
 
+    # key/mode are categorical, so accuracy rather than MAE/correlation
+    for col in ("key", "mode"):
+        acc = (merged[f"{col}_real"] == merged[f"{col}_predicted"]).mean()
+        print(f"{col}: accuracy={acc:.3f}")
+    exact = ((merged["key_real"] == merged["key_predicted"]) & (merged["mode_real"] == merged["mode_predicted"])).mean()
+    print(f"key+mode exact: accuracy={exact:.3f}")
+
     if args.per_song_csv:
-        columns = ["id", "name"] + [f"{f}_real" for f in _COMPARABLE_FEATURES] + [f"{f}_predicted" for f in _COMPARABLE_FEATURES]
+        categorical = [f"{c}_{side}" for c in ("key", "mode") for side in ("real", "predicted")]
+        columns = (["id", "name"] + [f"{f}_real" for f in _COMPARABLE_FEATURES]
+                   + [f"{f}_predicted" for f in _COMPARABLE_FEATURES] + categorical + ["key_confidence"])
         merged[columns].to_csv(args.per_song_csv, index=False)
         print(f"\nper-song values written to {args.per_song_csv}")
 
