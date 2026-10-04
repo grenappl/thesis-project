@@ -22,7 +22,9 @@ data/
 # Scratch space for uploaded audio awaiting the demo pipeline
 api/pipelines/demo/_uploads/
 
-# NOTE: might remove
+# misc
 notebooks/dataset/
 notebooks/logs
 test
+spotipy_cache.json
+.kilo

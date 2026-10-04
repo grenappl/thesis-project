@@ -75,20 +75,6 @@ export default function DatasetPage() {
             </option>
           ))}
         </select>
-
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Link2 size={14} />
-            Connect Source
-          </Button>
-          <Button
-            size="sm"
-            className="bg-accent hover:bg-accent-hover text-accent-foreground"
-          >
-            <Upload size={14} />
-            Upload Dataset
-          </Button>
-        </div>
       </div>
 
       <div className="card overflow-hidden">

@@ -1,29 +1,32 @@
-# Data Cleaning Process (Validation + Lyrics Filtering)
+# Data Cleaning Process (Validation → Lyrics Filtering → Sentiment)
 
 This document describes the cleaning/validation steps used to prepare the dataset for downstream analysis (e.g., NLP sentiment/alignment) using:
 
 - `notebooks/1_validation.ipynb`
 - `notebooks/2_lyrics_filtering.ipynb`
+- `notebooks/3_sentiment_analysis.ipynb`
 
 The pipeline focuses on ensuring:
 
 - dataset integrity (missing values, duplicates, valid ranges)
 - sufficient lyrics coverage for NLP
 - lyrics text cleanliness and validity (English, non-trivial length, no metadata artifacts)
+- a trustworthy lyric-sentiment signal that can be compared against audio valence (alignment)
 
 ---
 
 ## 1) Dataset validation (`notebooks/1_validation.ipynb`)
 
 ### 1.1 Dataset acquisition and basic structure
-- Load `dataset/songs.csv` into `songs` and `dataset/artists.csv` into `artists`.
-- If `dataset/songs.csv` and `dataset/artists.csv` are missing, download the Kaggle dataset:
+- In the setup cell, if **both** `dataset/songs.csv` and `dataset/artists.csv` are missing, the Kaggle dataset is downloaded via `kagglehub` (and a stale `dataset/.complete` marker is removed if present):
   - `serkantysz/490k-spotify-song-audio-embeddings-and-metadata`
   - Output directory: `dataset/`
+- Seaborn theme (`whitegrid`/`muted`) and figure DPI are configured.
+- Load `dataset/songs.csv` into `songs` and `dataset/artists.csv` into `artists`.
 
 The notebook also prints:
 - row/column counts
-- sample rows (`songs.head()`)
+- sample rows (`songs.head()` / `artists.head()`)
 - column data types
 - basic year preview (e.g., `year >= 2024`)
 
@@ -48,16 +51,16 @@ A small visual spot-check prints the first few non-empty lyrics samples.
 
 ### 1.4 Popularity distribution sanity checks
 The notebook analyzes `songs['popularity']`:
-- descriptive statistics
-- percentage of tracks with `popularity == 0`
-- number of tracks with `popularity > 50`
+- histogram and horizontal boxplot of the full popularity range
+- counts/percentages of zero-popularity vs non-zero-popularity tracks
 
-Decision rule:
-- If the fraction of zero popularity tracks is high (`zero_pct > 25`), recommend filtering out `popularity=0`.
+It then investigates whether zero-popularity is systematic rather than random:
+- compares the genre mix of zero-popularity vs non-zero-popularity tracks (`value_counts(normalize=True)` per group, plus the percentage-point difference)
+- plots the year distribution of zero vs non-zero popularity tracks
+- runs a chi-square test of independence on the `genre × is_zero_pop` contingency table (`chi2_contingency`; p < 0.05 → zero-popularity status is *not* independent of genre)
+- computes the zero-popularity rate per release year (`groupby('year')`), inspecting the most recent years
 
-It also visualizes:
-- histogram of popularity
-- horizontal boxplot
+This evidence supports the later decision to keep only `popularity > 0` tracks (reducing label noise from unranked tracks).
 
 ### 1.5 Audio feature distribution validation
 Audio features are enumerated as:
@@ -146,6 +149,13 @@ It sorts by popularity (descending) and removes duplicates by:
 
 This serves as the input candidate set for lyrics filtering.
 
+### 1.13 Valence distribution — key NLP alignment feature
+The notebook closes with a dedicated look at `songs['valence']`, since it is the audio counterpart to lyric sentiment:
+- prints the valence mean, standard deviation, and `Corr(valence, popularity)`
+- plots the valence distribution (with a mean line) and a valence-vs-popularity scatter
+
+It notes that valence will be normalized to the −1 to +1 range before the alignment gap is computed in the sentiment notebook (§3).
+
 ---
 
 ## 2) Lyrics cleaning and filtering (`notebooks/2_lyrics_filtering.ipynb`)
@@ -203,14 +213,34 @@ Before validation, `clean_lyrics()` removes common non-lyric artifacts:
 ### 2.5 Language and “looks English” fallback
 To avoid rejecting valid English lyrics incorrectly, the notebook uses:
 - `langdetect.detect()` for primary language detection
-- a fallback heuristic `looks_english()`
+- a fallback heuristic `looks_english()` used only when `detect()` does not return `'en'`
 
-Heuristic:
-- extract words matching `[a-z]+`
-- count how many appear in a set of common English stop words
-- require a minimum ratio (`min_ratio`, default 0.15)
+The English word set is built from NLTK stopwords:
+- `ENGLISH_COMMON_WORDS = set(stopwords.words('english')) ∪ {'like', 'hate'}`
+  (`DetectorFactory.seed = 0` is set for reproducible `langdetect` output, and `nltk.download('stopwords')` is run.)
 
-### 2.6 Comprehensive lyrics validity function
+Heuristic `looks_english(text, min_ratio=0.15)`:
+- extracts words matching `\b[a-z]+\b`
+- counts how many appear in `ENGLISH_COMMON_WORDS`
+- requires the matched ratio to be `>= min_ratio` (default 0.15)
+
+### 2.6 Validating the English-fallback threshold
+Because the `looks_english` fallback decides the fate of lyrics that `langdetect` mislabels, the notebook validates the `min_ratio=0.15` threshold instead of assuming it:
+1. take a random sample of `5000` tracks from `filtered` **first** (sampling before detection keeps this cheap)
+2. compute `cleaned_lyrics`, `langdetect_result`, and `common_word_ratio` on the sample only
+3. narrow down to the fallback-triggered subset (tracks where `langdetect_result != 'en'`)
+4. add a blank `manual_label` column (`en` / non-English / garbage) to hand-label these tracks
+5. sweep thresholds `0.15 → 0.50` in steps of `0.05`, computing precision and recall of `common_word_ratio >= t` against the manual ground truth
+
+This confirms (or tunes) the fallback threshold. A companion markdown cell lists track indices that were flagged wrongly (both those corrected by the fallback and those still wrong).
+
+### 2.7 Sample validation and runtime estimate
+Before the long full-corpus pass, the notebook de-risks it:
+- validates a random sample (`sample_size = 5000`) and logs per-track decisions to `logs/valid_lyrics_test_samples.txt` (stdout redirected to file)
+- displays the flagged (`is_valid_lyrics == False`) tracks with their IDs/names for manual spot-checks
+- estimates total runtime from an observed per-record rate (e.g. from a 1000-track test run) and formats the estimate as hours/minutes/seconds
+
+### 2.8 Comprehensive lyrics validity function
 Core filtering happens in `is_lyrics_valid(lyrics, index, ...)`.
 
 A lyrics string is marked **valid** only if it passes all checks:
@@ -243,14 +273,17 @@ A lyrics string is marked **valid** only if it passes all checks:
 
 If it fails any condition, the function prints a reason (used for logs).
 
-### 2.7 Applying lyrics validation across years and writing outputs
-To reduce memory/time overhead and enable reproducible logging, the notebook validates per release year:
+### 2.9 Applying lyrics validation across years and writing outputs
+To reduce memory/time overhead and enable reproducible logging, the notebook validates per release year.
 
 - Creates output directories:
   - `data_filtered/` (for per-year cleaned CSVs)
-  - `logs/` (for per-year validity decision logs)
+  - `logs/` (for per-year validity decision logs and a consolidated `logs/summary_valid_lyrics.txt`)
 
-For each year (performed in descending blocks, e.g. 2021–2023, then 2018–2020, etc.):
+Years are processed in descending blocks, one notebook cell per block:
+- `2021–2023`, `2018–2020`, `2015–2017`, `2012–2014`, `2008–2011`, `2004–2007`, `2000–2003`
+
+For each year within a block:
 
 1. Compute mask `filtered['year'] == year`
 2. If the log file doesn’t exist, open `logs/valid_lyrics_{year}.txt` and temporarily redirect `stdout`
@@ -258,18 +291,82 @@ For each year (performed in descending blocks, e.g. 2021–2023, then 2018–202
    - `filtered.loc[mask, 'is_valid_lyrics'] = ...apply(lambda row: is_lyrics_valid(...))`
 4. Save the subset to `data_filtered/songs_{year}.csv` if it doesn’t exist yet:
    - `df[df['is_valid_lyrics']].to_csv(..., index=False)`
+5. Append the per-year BEFORE/AFTER counts to `logs/summary_valid_lyrics.txt` via `write_to_summary_log(...)` (idempotent — a year block is only written once)
 
-At the end, it reports total track counts before vs after filtering by aggregating all per-year CSVs.
+The helper `data_filtered_len(year)` re-reads the per-year CSV (falling back to the in-memory frame) so the notebook can total the surviving tracks, and `print_track_count()` reports old vs new counts and the number of deleted tracks.
 
 ---
 
-## 3) Resulting dataset semantics
+## 3) Sentiment & alignment scoring (`notebooks/3_sentiment_analysis.ipynb`)
+
+This notebook consumes the per-year cleaned CSVs in `notebooks/data_filtered/` and produces the lyric-sentiment and audio–lyric alignment signals used downstream.
+
+### 3.1 Loading the filtered corpus
+- Reads every file in `data_filtered/`, reverses the list, then concatenates them into a single `songs` frame (`pd.concat`).
+- Prints the combined row count and inspects which tracks already have `lyric_sentiment` / `alignment_gap`.
+- Re-applies `clean_lyrics()` (strips `[...]` sections and `00:12.34` LRC timestamps) and keeps only `is_valid_lyrics == True`, reporting how many tracks enter the sentiment pipeline.
+
+### 3.2 Sentiment tooling
+Four tools are compared:
+- **VADER (primary)** — rule/lexicon tool producing a continuous `compound` score in `[-1, 1]`.
+- **AFINN (secondary)** — lexicon tool whose raw score is summed/averaged, so it is *not* on the VADER scale.
+- **pysentimiento** — transformer classifier returning `POS/NEU/NEG` probabilities.
+- **`siebert/sentiment-roberta-large-english`** — binary classifier used as a directional/confidence check.
+
+Objects are instantiated as `SentimentIntensityAnalyzer`, `Afinn()`, `create_analyzer(task="sentiment", lang="en")`, and a Hugging Face `pipeline("sentiment-analysis", ...)`.
+
+Per-tool scoring helpers (first exercised on a single test track):
+- VADER: `polarity_scores(text)['compound']`
+- AFINN: `afinn_normalized_matched()` — raw AFINN score divided by the number of lexicon-matched words (`0.0` if none match)
+- pysentimiento: `POS − NEG` probability
+- RoBERTa: label mapped to `'POS'` / `'NEG'`
+
+### 3.3 Valence normalization
+- `valence_norm = valence * 2 - 1` maps audio valence from `[0, 1]` to `[-1, 1]` so it is directly comparable to VADER.
+
+### 3.4 Sentiment on a sample (VADER + AFINN)
+To keep runtime manageable, sentiment is first computed on a random subsample:
+- `sample_songs = songs.sample(len(songs) // 25)` (~4%)
+- `vader_compound` = VADER compound per track
+- `afinn_raw` = `afinn_normalized_matched()` per track, then min–max rescaled to `[-1, 1]` as `afinn_rescaled`
+- the sample is persisted to `test/samples_1.csv` so later cells can reload it
+
+A (currently commented-out) pysentimiento scoring block is retained for reference.
+
+### 3.5 Cross-tool / RoBERTa checks
+- Runs the RoBERTa classifier on a further 1/10 subsample (`random_state=42`), storing `roberta_label` (`POS`/`NEG`) and saving `test/samples_with_roberta_1.csv`.
+- Computes Pearson and Spearman correlations across `valence_norm`, `vader_compound`, `afinn_rescaled`, and `popularity` (`scipy.stats.pearsonr` / `spearmanr`), plus histograms of the three sentiment distributions.
+
+Observation: VADER and AFINN correlate strongly with each other, while their correlation with audio `valence_norm` and with `popularity` is weak — which motivates the alignment-gap analysis.
+
+### 3.6 Audio–lyric alignment on samples
+For the sample, two alignment features are computed by halving the signed difference between lyric sentiment and audio valence (so the result stays in `[-1, 1]`):
+- `audio_vader_alignment = (vader_compound − valence_norm) / 2`
+- `audio_afinn_alignment = (afinn_rescaled − valence_norm) / 2`
+
+Histograms of both alignments (alongside `popularity`) are plotted, and the augmented sample is written back to `test/samples_1.csv`.
+
+### 3.7 Full-corpus VADER sentiment & alignment gap
+- Splits `songs` into a dict keyed by release year (`songs_by_year`, years `2000–2023`).
+- For each year, computes `lyric_sentiment` = VADER `compound` for every track.
+- For each year, computes the alignment gap:
+  - `alignment_gap = lyric_sentiment − valence_norm`
+- Sanity-checks that per-year row counts match the saved CSVs and that the re-concatenated frame (`songs_new`) matches the original length.
+- Plots distributions of `valence_norm`, `lyric_sentiment`, and `alignment_gap`.
+
+### 3.8 Writing outputs
+After an interactive confirmation prompt, the enriched frames are written back to `data_filtered/songs_{year}.csv`, so each per-year file now also carries `valence_norm`, `lyric_sentiment`, and `alignment_gap`.
+
+---
+
+## 4) Resulting dataset semantics
 
 After these notebooks complete:
 
 - The dataset has been validated for structural integrity (missing values, ranges, duplicates, linkage).
 - Only tracks with non-empty, sufficiently long, mostly-English lyrics survive the filtering.
 - Lyrics have been normalized to reduce escape-sequence artifacts and to remove LRC/timestamp/section metadata.
+- Each surviving track carries an audio `valence_norm` (∈ `[-1, 1]`), a VADER `lyric_sentiment` (∈ `[-1, 1]`), and their `alignment_gap = lyric_sentiment − valence_norm`.
 
-The per-year outputs in `notebooks/data_filtered/` represent the cleaned training/evaluation corpus for subsequent NLP steps.
+The per-year outputs in `notebooks/data_filtered/` represent the cleaned, sentiment-scored training/evaluation corpus for subsequent modeling steps.
 
