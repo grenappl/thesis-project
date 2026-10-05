@@ -9,11 +9,13 @@ const PAGE_TITLES: Record<string, string> = {
   "/analytics": "Analytics",
   "/history": "History",
   "/dataset": "Dataset",
+  "/song": "Song"
 };
 
 export default function Header() {
   const pathname = usePathname();
-  const title = PAGE_TITLES[pathname] ?? "Lyric-Audio Predictor";
+  const pt = pathname.includes("/song") ? "/song": pathname;
+  const title = PAGE_TITLES[pt] ?? "Lyric-Audio Predictor";
 
   return (
     <header className="h-16 border-b border-border bg-sidebar flex items-center justify-between px-6">

@@ -12,11 +12,10 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { historyEntries, type HistoryStatus } from "@/lib/mock-data";
+import { historyEntries } from "@/lib/mock-data";
 import { useRouter } from "next/navigation";
 
 const DATE_OPTIONS = ["All time", "Last 7 days", "Last 30 days"] as const;
-
 const PAGE_SIZE = 5;
 
 function formatDate(iso: string) {

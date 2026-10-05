@@ -15,7 +15,7 @@ export const MOCK_PREDICTION: PredictionResult = {
     key: 2,
     loudness: 0.5,
     mode: 1,
-    speechniness: 0.5,
+    speechiness: 0.5,
     acousticness: 0.5,
     instrumentalness: 0.5,
     liveness: 0.5,
@@ -73,8 +73,6 @@ export const alignmentBreakdown = [
   { feature: "Sentiment", value: 0.71 }
 ];
 
-export type HistoryStatus = "completed" | "failed" | "processing";
-
 export interface HistoryEntry {
   id: string;
   track: string;
@@ -91,23 +89,4 @@ export const historyEntries: HistoryEntry[] = [
   { id: "h5", track: "Static Bloom", artist: "Nova Reign", popularity: 56, timestamp: "2026-09-30T11:15:00Z" },
   { id: "h6", track: "Amber Line", artist: "Theo Wren", popularity: 89, timestamp: "2026-09-29T20:58:00Z" },
   { id: "h7", track: "Hollow Coast", artist: "Dove Castillo", popularity: 46, timestamp: "2026-09-28T08:21:00Z" },
-];
-
-export type DatasetStatus = "ready" | "processing" | "error";
-
-export interface DatasetEntry {
-  id: string;
-  name: string;
-  year: number;
-  alignmentScore: number;
-  genre: "Pop" | "Hip-Hop" | "Rock";
-  popularity: number;
-}
-
-export const datasetEntries: DatasetEntry[] = [
-  { id: "d1", name: "Blinding Lights", year: 2020, alignmentScore: 0.42, genre: "Pop", popularity: 87 },
-  { id: "d2", name: "Sicko Mode", year: 2018, alignmentScore: -0.18, genre: "Hip-Hop", popularity: 79 },
-  { id: "d3", name: "Bohemian Rhapsody", year: 1975, alignmentScore: 0.05, genre: "Rock", popularity: 74 },
-  { id: "d4", name: "HUMBLE.", year: 2017, alignmentScore: -0.31, genre: "Hip-Hop", popularity: 83 },
-  { id: "d5", name: "Levitating", year: 2020, alignmentScore: 0.27, genre: "Pop", popularity: 81 },
 ];
