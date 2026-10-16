@@ -4,7 +4,7 @@
 **Researchers:** Joenell Conrad C. de Pedro, Ivan Paul V. Ruelan — BS Computer Science, University of San Carlos
 **Adviser:** Christian V. Maderazo, M.Eng
 **Reviewer:** Neriah "BJ" Ato, Data Scientist
-**Please return the completed review form (Section 9) by:** `[date — fill in before sending]`
+**Please return the completed review form (Section 9) by:** **Friday, 23 October 2026**
 
 Thank you for agreeing to review our modeling pipeline. This guide tells you what we are asking you to judge, how to check it, and where everything is. Expect roughly **2–3 hours** of review time, plus about **40 minutes of unattended compute** if you choose to reproduce the results yourself.
 
@@ -18,7 +18,7 @@ Thank you for agreeing to review our modeling pipeline. This guide tells you wha
 | **Your time** | About 2–3 hours of reading and judgement |
 | **Optional compute** | A 2-minute quick check, or about 40 minutes for a full re-run. CPU only, no GPU |
 | **What you return** | The review form in Section 9: one verdict and a short comment per statement, signed and dated |
-| **Deadline** | `[date — fill in before sending]` |
+| **Deadline** | **Friday, 23 October 2026** |
 
 ---
 
@@ -171,7 +171,7 @@ The alignment score is largely a rescaled lyric-sentiment score. It is also, by 
 
 | | |
 |---|---|
-| Access | the GitHub repository `grenappl/thesis-project` — `[access method: collaborator invite / zip — fill in before sending]` |
+| Access | the GitHub repository <https://github.com/grenappl/thesis-project>. It is public, so no invite or account is needed |
 | The proposal document | *de Pedro, Ruelan — Approved Proposal Document* (PDF, sent with this guide). Chapter 4, especially Sections 4.2.2 and 4.9 |
 | Software | Git, Python 3.13, and [`uv`](https://docs.astral.sh/uv/). Windows, macOS and Linux all work |
 | Hardware | any recent CPU; **no GPU needed**. 16 GB RAM recommended |
@@ -210,7 +210,7 @@ In the proposal PDF, read:
 | **4.9.3(A)** | **82–84** | The paired bootstrap decision rule, and **Table 11** (p. 83): the result ranges we committed to *before* training |
 | **4.9.3(C)** | **84–86** | Your role, in the proposal's own words |
 
-**One wording error in the proposal.** The first sentence of Section 4.2.2 (p. 61) calls the twelve audio descriptors "self-computed". That is wrong. The modeling stage uses the descriptors Spotify computed and distributed with the dataset, as Section 4.3 (p. 66) and the code both state. Self-computed descriptors appear only in the demo application, which is out of scope (Section 2). The word will be corrected in the final manuscript.
+**One wording error in the proposal.** The first sentence of Section 4.2.2 (p. 61) calls the twelve audio descriptors "self-computed". That is wrong. The modeling stage uses the descriptors Spotify computed and distributed with the dataset, as Section 4.3 (p. 66) and the code both state. Self-computed descriptors appear only in the demo application, which is out of scope (Section 2). Please read the proposal with that correction in mind.
 
 ### Step 2 — Get oriented in the code (about 20 minutes)
 
@@ -466,6 +466,6 @@ For each item, enter one verdict: **Agree**, **Agree with reservations**, **Disa
 | *Downstream:* demo audio-estimation validation | `docs/feature_extraction_calibration.md` (66-song validation, including the 2.65-point prediction-sensitivity figure) |
 | *Parallel review:* music teacher's materials | `samples/validation_sample.csv`, `samples/Track Validation Sheet.xlsx` |
 
-**Questions while reviewing:** `[contact details — fill in before sending]`
+**Questions while reviewing:** please contact either researcher, Joenell Conrad C. de Pedro or Ivan Paul V. Ruelan, at `[email or phone]`. We are happy to arrange a short call if that is easier.
 
 Thank you again for your time and expertise.
