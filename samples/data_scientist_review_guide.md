@@ -4,7 +4,7 @@
 **Researchers:** Joenell Conrad C. de Pedro, Ivan Paul V. Ruelan — BS Computer Science, University of San Carlos
 **Adviser:** Christian V. Maderazo, M.Eng
 **Reviewer:** Neriah "BJ" Ato, Data Scientist
-**Please return the completed review form (Section 9) by:** **Friday, 23 October 2026**
+**Please return the completed review form (Section 9) by:** **Monday, 19 October 2026**
 
 Thank you for agreeing to review our modeling pipeline. This guide tells you what we are asking you to judge, how to check it, and where everything is. Expect roughly **2–3 hours** of review time, plus about **40 minutes of unattended compute** if you choose to reproduce the results yourself.
 
@@ -17,8 +17,9 @@ Thank you for agreeing to review our modeling pipeline. This guide tells you wha
 | **Not your role** | Finding a better model, or judging the audio features themselves (a separate reviewer covers those) |
 | **Your time** | About 2–3 hours of reading and judgement |
 | **Optional compute** | A 2-minute quick check, or about 40 minutes for a full re-run. CPU only, no GPU |
+| **In return** | Named acknowledgement in the thesis (with your consent) and a copy of the final results. See Section 0 |
 | **What you return** | The review form in Section 9: one verdict and a short comment per statement, signed and dated |
-| **Deadline** | **Friday, 23 October 2026** |
+| **Deadline** | **Monday, 19 October 2026** |
 
 ---
 
@@ -44,6 +45,14 @@ Thank you for agreeing to review our modeling pipeline. This guide tells you wha
 - Where you mark *Agree with reservations* or *Disagree*, we will report the reservation as you stated it, together with our response or the correction we made. We will not leave it out.
 - If you find an error, we would much rather fix it now than at the defense. Section 8 lists errors we have already found and corrected ourselves.
 - We may contact you with one round of short follow-up questions after reading your comments.
+
+**What you receive in return**
+
+- **Formal acknowledgement in the thesis.** You will be named as the independent Data Scientist validator in Section 4.9.3(C) and in the Acknowledgements. That depends on your consent, which the form in Section 9 asks for, and you can choose to be credited by role only.
+- **Your assessment recorded in the study's validation results.** Your verdicts are reported in the thesis, so your review becomes part of how the study's accuracy claims are judged by the panel.
+- **A copy of the final results.** We will send you the final thesis chapter on the results and the defense outcome once both are available.
+- `[Certificate of appreciation, signed by the adviser — keep or delete]`
+- `[Honorarium or token of appreciation: ________ — keep or delete]`
 
 **What you do not need to do**
 
