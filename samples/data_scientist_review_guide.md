@@ -27,12 +27,12 @@ Thank you for agreeing to review our modeling pipeline. This guide tells you wha
 **What you will receive from us**
 
 - This guide.
-- The thesis manuscript as a PDF. Chapter 4 is the part that matters for your review.
+- Our approved thesis proposal (August 2026) as a PDF. Chapter 4, *Design and Methodology*, is the part that matters for your review. Page references in this guide are to that PDF.
 - Read access to the code repository, which contains the dataset, the six modeling notebooks, every result file the thesis cites, and a one-command reproduction script.
 
 **How the review runs**
 
-1. You read the methodology (Sections 4.2.2 and 4.9 of the thesis) and this guide.
+1. You read the methodology (Sections 4.2.2 and 4.9 of the proposal) and this guide.
 2. You decide how deep to go: review the reported figures as given, run the 2-minute quick check, or re-run the whole pipeline. Any of the three is acceptable. Please record which one you chose (form item B1).
 3. You work through the questions in Steps 4 and 5 and fill in the form.
 4. If something is unclear partway through, please ask us rather than guess. Contact details are at the end of this guide.
@@ -108,7 +108,7 @@ The four models with features are each trained twice: with **XGBoost** (the prim
 | | |
 |---|---|
 | Access | the GitHub repository `grenappl/thesis-project` — `[access method: collaborator invite / zip — fill in before sending]` |
-| The thesis document | Chapter 4, especially Sections 4.2.2 and 4.9 — `[provided separately as PDF]` |
+| The proposal document | *de Pedro, Ruelan — Approved Proposal Document* (PDF, sent with this guide). Chapter 4, especially Sections 4.2.2 and 4.9 |
 | Software | Git, Python 3.13, and [`uv`](https://docs.astral.sh/uv/). Windows, macOS and Linux all work |
 | Hardware | any recent CPU; **no GPU needed**. 16 GB RAM recommended |
 | Disk | about 15 GB free: roughly 0.5 GB for the repository and dataset, several GB for the Python environment, and several GB more for the Random Forest models if you do the full re-run |
@@ -128,7 +128,7 @@ The dataset (`notebooks/data_filtered/songs_2000.csv` … `songs_2023.csv`, abou
 
 **Why `uv sync` downloads so much.** The project's environment also serves the demo application, so it pulls in PyTorch, Hugging Face Transformers and (on Linux) TensorFlow. The modeling notebooks don't use them, but installing the locked environment as a whole is what makes the reproduction exact. Please use `uv sync` rather than installing packages by hand. `uv.lock` pins every version, including `xgboost`, `scikit-learn` and `networkx`, and the artist split uses `networkx`'s Louvain implementation, which is only reproducible under a fixed version.
 
-**Which documents to trust.** For your review, the authoritative sources are the thesis manuscript, this guide, and the files in `notebooks/` and `notebooks/artifacts/`. The repository also contains `MODELING_REPORT.md`, a planning document written *before* the pipeline was run. Its Section 4 describes an earlier split design (primary-artist grouping with an edge cut) that was later replaced by the community-detection split described here. Please disregard that section.
+**Which documents to trust.** For your review, the authoritative sources are the approved proposal, this guide, and the files in `notebooks/` and `notebooks/artifacts/`. The repository also contains `MODELING_REPORT.md`, a planning document written *before* the pipeline was run. Its Section 4 describes an earlier split design (primary-artist grouping with an edge cut) that was later replaced by the community-detection split described here. Please disregard that section.
 
 ---
 
@@ -136,7 +136,17 @@ The dataset (`notebooks/data_filtered/songs_2000.csv` … `songs_2023.csv`, abou
 
 ### Step 1 — Read the methodology (about 30 minutes)
 
-In the thesis document, read **Section 4.2.2** (model training, the hyperparameter grids, the ladder and the evaluation metrics) and **Section 4.9** (verification, testing and validation). Table 11 states the result ranges we expected before training.
+In the proposal PDF, read:
+
+| Section | Pages | What it covers |
+|---|---|---|
+| 4.2.1 (end) | 59–61 | The alignment formula and the artist-aware 70/15/15 split |
+| **4.2.2** | **61–66** | Model training: why XGBoost and Random Forest, the two hyperparameter grids (p. 63), the model ladder (Table 5, p. 64), the metrics, and why R² is primary |
+| 4.9.1–4.9.2 | 79–81 | Verification (what is asserted in code) and testing (seed, cross-validation, hyperparameter and cross-algorithm robustness) |
+| **4.9.3(A)** | **82–84** | The paired bootstrap decision rule, and **Table 11** (p. 83): the result ranges we committed to *before* training |
+| **4.9.3(C)** | **84–86** | Your role, in the proposal's own words |
+
+**One wording error in the proposal.** The first sentence of Section 4.2.2 (p. 61) calls the twelve audio descriptors "self-computed". That is wrong. The modeling stage uses the descriptors Spotify computed and distributed with the dataset, as Section 4.3 (p. 66) and the code both state. Self-computed descriptors appear only in the demo application, which is out of scope (Section 2). The word will be corrected in the final manuscript.
 
 ### Step 2 — Get oriented in the code (about 20 minutes)
 
@@ -270,6 +280,18 @@ The 23 audio columns are the eleven non-key descriptors plus twelve one-hot key 
 | XGBoost | −0.00042 | [−0.00115, +0.00032] | No |
 | Random Forest | +0.00027 | [−0.00072, +0.00123] | No |
 
+### Against the ranges committed to in advance (proposal Table 11, p. 83)
+
+| Quantity | Expected (Table 11) | Observed (XGBoost) | Reading |
+|---|---|---|---|
+| Baseline R² | ≈ 0.00, possibly slightly negative | −0.0013 | As expected |
+| Control R² | 0.05 – 0.20 | 0.0683 | Inside the range, at its low end. Clears the 0.05 "investigate the pipeline" threshold and is far below the 0.20 "re-verify for leakage" threshold |
+| Control RMSE | 15 – 20 popularity points | 15.09 | Inside the range |
+| ΔR² (Augmented − Control) | 0.001 – 0.01 | −0.0004 (−0.61% of Control R²) | Below the expected range |
+| 95% bootstrap CI on ΔR² | decides the outcome | [−0.0011, +0.0003] | Contains zero, so the result is reported as **no detectable contribution** |
+
+The two diagnostic thresholds in Table 11 exist to catch a broken pipeline: a Control R² below 0.05 would suggest no usable signal, and one above 0.20 would suggest leakage. Neither was triggered.
+
 ### Robustness (`robustness_summary.json`)
 
 | Check | Result |
@@ -344,6 +366,12 @@ For each item, enter one verdict: **Agree**, **Agree with reservations**, **Disa
 **Concerns, or anything we should change or state more clearly:**
 
 >
+
+**Consent to be named.** May we name you and state your professional background (role, field and years of experience) in the thesis alongside these findings?
+
+- [ ] Yes. Background as you would like it stated: ____________________
+- [ ] Only the role ("an independent data scientist"), without my name
+- [ ] No
 
 **Reviewer:** Neriah "BJ" Ato
 **Signature:** ____________________
