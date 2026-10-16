@@ -66,7 +66,7 @@ Your findings will be reported **qualitatively** in the thesis, separately from 
 
 ---
 
-## 2. The study in one page
+## 2. The study, and how your review fits into it
 
 **Research question.** Does the emotional agreement or mismatch between a song's lyrics and its music help predict its Spotify popularity, beyond what the audio and lyric features already provide?
 
@@ -99,7 +99,71 @@ The four models with features are each trained twice: with **XGBoost** (the prim
 
 **A note on the null result.** The thesis committed in advance (Section 4.9.3(A)) to reporting a gain that does not survive resampling as "no detectable contribution". The headline figure is therefore not something we are trying to defend as a positive finding. What we need from you is a judgement on whether the *null* is trustworthy: whether the pipeline could plausibly have hidden a real effect, or manufactured the absence of one.
 
-**Out of scope.** The repository also contains a demonstration web application. It estimates the twelve audio descriptors from raw audio for new songs (`api/pipelines/demo/`) and serves the trained model through an API. None of that feeds the figures you are reviewing. The modeling stage uses the descriptors Spotify itself provides in the dataset. The audio-estimation pipeline is validated separately, so you can ignore `api/`, `app/` and everything under `scripts/` except `export_popularity_model.py`.
+### How your review fits into the whole project
+
+The thesis has six specific objectives (proposal Section 1.2.2, p. 12). Your review covers Objective 4 directly. The others either produce its inputs or consume its output, so this table shows what each one did and where it lives:
+
+| # | Objective | What was done | Where in the repository | Your review? |
+|---|---|---|---|---|
+| 1 | Extract and preprocess the data | Kaggle dataset `serkantysz/490k-spotify-song-audio-embeddings-and-metadata` (491,632 tracks) filtered to popularity > 0, release years 2000–2023, de-duplicated by (name, artists), and restricted to valid English lyrics (at least 20 words, language-detected, placeholders and metadata stripped). **259,458 tracks retained** | `notebooks/1_validation.ipynb`, `2_lyrics_filtering.ipynb`; documented step by step in `docs/cleaning_process.md` | Upstream. It defines the corpus, but is not under review |
+| 2 | Score lyric sentiment | VADER compound score per track, range −1 to +1. AFINN, pysentimiento and RoBERTa were compared on samples as cross-checks only | `notebooks/3_sentiment_analysis.ipynb` | Upstream |
+| 3 | Engineer the alignment feature | `alignment_gap = lyric_sentiment − (2 × valence − 1)`, verified against hand-computed reference cases and over the whole corpus (maximum deviation 2.2 × 10⁻¹⁶) | `3_sentiment_analysis.ipynb` computes it; `4_behavioral_checks.ipynb` verifies it | Upstream, but see "What the earlier stages already show" below |
+| **4** | **Train and evaluate the models** | **Artist-disjoint split, two grid searches, nine models, paired bootstrap, robustness checks** | **`notebooks/5_splits` … `7_model_ladder`, `9_robustness`, `modeling_config.py`** | **Yes. This is your review** |
+| 5 | SHAP attribution | TreeSHAP on the XGBoost Alignment-Augmented model, grouped by feature family | `notebooks/8_shap.ipynb` | Context. The figures are in Section 6, and comments are welcome |
+| 6 | Demonstration application | A web app: upload a song plus lyrics, estimate its audio descriptors, score its sentiment and alignment, and show a predicted popularity with a SHAP breakdown | `api/` (FastAPI backend), `app/` (Next.js frontend) | Out of scope, with one link to your review (below) |
+
+**The end-to-end flow:**
+
+```
+ Kaggle Spotify dataset (491,632 tracks: Spotify audio descriptors, lyrics, genre, popularity)
+        │
+        ▼  Objective 1: notebooks 1–2      popularity > 0, 2000–2023, de-duplication, English lyrics
+ 259,458 tracks  (notebooks/data_filtered/songs_2000.csv … songs_2023.csv)
+        │
+        ▼  Objectives 2–3: notebook 3      VADER lyric_sentiment, valence_norm, alignment_gap
+        │
+        ▼  notebook 4                      formula verified, behavioural checks (§4.9.3 D)
+        │
+ ┌──────┴───────────── YOUR REVIEW (§4.9.3 C) ──────────────┐
+ │  notebook 5   artist-disjoint 70/15/15 split              │
+ │  notebook 6   XGBoost and Random Forest grid searches     │
+ │  notebook 7   nine models, verification, bootstrap ΔR²    │
+ │  notebook 9   seed, CV, hyperparameter, cross-algorithm   │
+ └──────┬───────────────────────────────────────────────────┘
+        │
+        ├──▶ notebook 8: SHAP attribution (Objective 5)
+        │
+        ▼  scripts/export_popularity_model.py   retrains and verifies against notebook 7
+ models/popularity/xgboost_alignment_augmented.json
+        │
+        ▼  Objective 6: demo application        POST /predict serves this exact model
+```
+
+**The one link between your review and the demo application.** The demo's popularity prediction (`POST /predict`, in `api/services/`) serves the same XGBoost Alignment-Augmented model you are reviewing. It is not a separate model. `scripts/export_popularity_model.py` (your quick check in Step 3) produces the file the app loads, and it refuses to write it unless the retrained model matches notebook 7's test predictions to within 10⁻⁴. If you confirm the reported figures, you are also confirming the model the demo serves.
+
+Everything else in the demo app is out of scope. For a new song there are no Spotify descriptors, so the app *estimates* them from raw audio (`api/pipelines/demo/`, using pretrained audio embeddings and regression heads fit against Spotify's own values). Those estimates are validated separately against 66 real songs whose Spotify values are known. On that sample, estimation error moves the predicted popularity by **2.65 points on average** (median 1.99, maximum 8.54), small next to the model's own ~15-point RMSE (`docs/feature_extraction_calibration.md`). The proposal treats demo predictions as illustrative (Section 1.4). None of this feeds the figures you are reviewing. You can ignore `api/`, `app/` and everything under `scripts/` except `export_popularity_model.py`.
+
+**The two expert reviews.** The proposal (Section 4.9.3(C), pp. 84–86) splits expert validation between two reviewers. Their findings are reported separately:
+
+| | Music teacher | Data scientist (you) |
+|---|---|---|
+| Checks | Whether the audio descriptors the alignment score is built from (principally key, mode and valence) are musicologically defensible | Whether the hyperparameter configuration is defensible, and whether the reported R², RMSE and MAE are correctly and reproducibly derived |
+| Material | A stratified sample of 15 dataset tracks with their recordings (`samples/validation_sample.csv`, `samples/Track Validation Sheet.xlsx`) | The modeling notebooks, artifacts and reproduction script |
+| Layer of the pipeline | The model's inputs | The model and its reported accuracy |
+
+You don't need to look at the music teacher's materials. They are listed so you can see the full validation design.
+
+**What the earlier stages already show** (`notebooks/artifacts/behavioral_checks.json`, from notebook 4). These numbers set expectations for the result you are reviewing:
+
+| Check | Result |
+|---|---|
+| Correlation of `alignment_gap` with lyric sentiment | 0.857 (Pearson) |
+| Correlation of `alignment_gap` with valence | −0.393 |
+| Correlation of `alignment_gap` with popularity | 0.019 |
+| Tracks whose lyrics and music "agree" (\|gap\| ≤ 0.5) | 29.3%. Mismatch is the norm, consistent with the literature the proposal cites (Attia, 2025) |
+| Gap distribution | mean +0.32, standard deviation 0.93, 62% of tracks positive (lyrics brighter than the music) |
+
+The alignment score is largely a rescaled lyric-sentiment score. It is also, by construction, an exact linear combination of two columns the Control model already receives. The proposal argues (Section 4.2.2, p. 61) that supplying the difference explicitly still helps shallow trees, because a tree can isolate it in one split instead of approximating it with a staircase of many. The null result is evidence on that argument. Section 7, item 10, asks for your view.
 
 ---
 
@@ -320,6 +384,7 @@ These are the judgement calls in the pipeline. Some are not fully documented in 
 7. **The bootstrap resamples a single test partition.** It cannot capture variation that comes from the split itself. The 5-fold CV in notebook 9 covers that, and absolute R² turns out to depend heavily on the partition (0.023 to 0.165).
 8. **Two grid points hit the round cap.** Both `learning_rate = 0.01` configurations stopped at round 998 or 999 of 1,000 (`tuning_results.csv`), so early stopping never triggered for them, and their validation RMSE may be slightly pessimistic. We did not raise the cap. The whole XGBoost grid spans only 0.05 RMSE points, and the robustness check's "deeper, slower" setting (`max_depth` 6, `learning_rate` 0.01) leaves the conclusion unchanged. You may still judge that the cap should have been higher.
 9. **Absolute R² is low, and that is expected.** About 0.07 on the test set is at the low end of Table 11's expected range. Popularity depends heavily on things no model here receives, such as artist reach, marketing and playlisting. Artist-identity features are excluded on purpose (item 6), and the artist-disjoint split stops the model from memorising artists. The thesis's question is the *difference* between Control and Alignment-Augmented, not the absolute level.
+10. **The engineered feature is a linear combination of existing inputs.** `alignment_gap` is computed exactly from `lyric_sentiment` and `valence`, and Control already receives both. The proposal's case for adding it anyway (p. 61) is that trees split on one feature at a time, so a difference of two features is easier to use when it is supplied directly. Given the null result and the 0.857 correlation with lyric sentiment, is this ablation still a fair test of the feature? Or does it, by design, mostly test whether XGBoost and Random Forest can already recover the difference on their own? Either answer is reportable. We would value your view in the free-text comments.
 
 ## 8. Corrections already made
 
@@ -395,6 +460,11 @@ For each item, enter one verdict: **Agree**, **Agree with reservations**, **Disa
 | SHAP results | `notebooks/artifacts/shap_*.csv`, `fig_shap_*.png` |
 | Test-set predictions, all nine models | `notebooks/artifacts/test_predictions.csv` |
 | Quick reproduction script | `scripts/export_popularity_model.py` |
+| *Upstream (context only):* data validation, lyrics filtering, sentiment | `notebooks/1_validation.ipynb`, `2_lyrics_filtering.ipynb`, `3_sentiment_analysis.ipynb`; explained in `docs/cleaning_process.md` |
+| *Upstream:* formula verification and behavioral checks | `notebooks/4_behavioral_checks.ipynb` → `notebooks/artifacts/behavioral_checks.json`, `fig_gap_*.png` |
+| *Downstream (out of scope):* demo application | `api/` (backend; `POST /predict` loads `models/popularity/xgboost_alignment_augmented.json`), `app/` (frontend) |
+| *Downstream:* demo audio-estimation validation | `docs/feature_extraction_calibration.md` (66-song validation, including the 2.65-point prediction-sensitivity figure) |
+| *Parallel review:* music teacher's materials | `samples/validation_sample.csv`, `samples/Track Validation Sheet.xlsx` |
 
 **Questions while reviewing:** `[contact details — fill in before sending]`
 
