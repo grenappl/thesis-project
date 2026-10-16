@@ -1,195 +1,128 @@
-# Data Scientist Validation — Review Guide
+# Data Scientist Review Guide
 
 **Thesis:** *Lyric and Audio Emotional Alignment as a Predictor of Spotify Track Popularity: A Feature Engineering Approach*
-**Researchers:** Joenell Conrad C. de Pedro, Ivan Paul V. Ruelan — BS Computer Science, University of San Carlos
+**Researchers:** Joenell Conrad C. de Pedro and Ivan Paul V. Ruelan, BS Computer Science, University of San Carlos
 **Adviser:** Christian V. Maderazo, M.Eng
 **Reviewer:** Neriah "BJ" Ato, Data Scientist
-**Please return the completed review form (Section 9) by:** **Monday, 19 October 2026**
+**Deadline:** Monday, 19 October 2026
 
-Thank you for agreeing to review our modeling pipeline. This guide tells you what we are asking you to judge, how to check it, and where everything is. Expect roughly **2–3 hours** of review time, plus about **40 minutes of unattended compute** if you choose to reproduce the results yourself.
+---
 
-### At a glance
+## 1. What we need from you
 
-| | |
+1. Read Sections 4.2.2 and 4.9 of the attached proposal (about 30 minutes).
+2. Look over the modeling code and results in the repository (about 1 hour).
+3. Optional: run the 2-minute reproduction check, or re-run the full pipeline (about 40 minutes of unattended compute).
+4. Fill in the review form in Section 9.
+5. Send the form back to us by **Monday, 19 October 2026**.
+
+Total time: about 2 to 3 hours. You do not need a GPU, a database or audio software, and you do not need to write code.
+
+**The two questions you are answering** (proposal Section 4.9.3(C), pp. 84 to 86):
+
+1. Is the hyperparameter configuration chosen by our grid search a defensible choice for this dataset's size and features?
+2. Are the reported R², RMSE and MAE figures correctly and reproducibly derived from that configuration?
+
+This is not a second hyperparameter search. You do not need to find a better model. We need to know whether the figures we report can be trusted.
+
+## 2. What happens with your review
+
+- Your verdicts and comments are reported in Section 4.9.3(C) of the thesis as an independent expert assessment. They are reported in words, not converted to a score.
+- Any reservation or disagreement is reported as you wrote it, together with our response or the fix we made.
+- We may send you one short round of follow-up questions.
+- If anything is unclear while you review, contact us instead of guessing (details at the end).
+
+**In return you receive:**
+
+- Named acknowledgement in Section 4.9.3(C) and in the Acknowledgements, with your consent (the form asks). You can choose to be credited by role only.
+- A copy of the final results chapter and the defense outcome.
+- `[Certificate of appreciation signed by the adviser: keep or delete]`
+- `[Honorarium or token of appreciation: ________ : keep or delete]`
+
+---
+
+## 3. The study in brief
+
+**Research question.** Does the agreement or mismatch between a song's lyrical mood and its musical mood help predict Spotify popularity, beyond the audio and lyric features themselves?
+
+**The engineered feature.**
+
+```
+valence_normalized = 2 × valence − 1                       Spotify valence, rescaled from [0, 1] to [−1, 1]
+alignment_gap      = lyric_sentiment − valence_normalized  range [−2, 2]
+```
+
+`lyric_sentiment` is the VADER compound score (−1 to +1). A positive gap means the lyrics are more positive than the music sounds.
+
+**Data.** 259,458 English-language tracks released 2000 to 2023, from the Kaggle *490K Spotify Song Audio Embeddings & Metadata* dataset. The target is Spotify `popularity` (0 to 100), modeled as regression.
+
+**Models.** Five feature configurations:
+
+| Model | Features |
 |---|---|
-| **Your role** | Independent validator of the modeling stage — thesis Section 4.9.3(C) |
-| **The two questions** | Is the hyperparameter configuration defensible? Do the reported R², RMSE and MAE figures follow correctly and reproducibly from it? |
-| **Not your role** | Finding a better model, or judging the audio features themselves (a separate reviewer covers those) |
-| **Your time** | About 2–3 hours of reading and judgement |
-| **Optional compute** | A 2-minute quick check, or about 40 minutes for a full re-run. CPU only, no GPU |
-| **In return** | Named acknowledgement in the thesis (with your consent) and a copy of the final results. See Section 0 |
-| **What you return** | The review form in Section 9: one verdict and a short comment per statement, signed and dated |
-| **Deadline** | **Monday, 19 October 2026** |
+| Baseline | none (predicts the training mean) |
+| Audio-Only | the twelve Spotify audio descriptors (key one-hot encoded) |
+| Lyric-Only | lyric sentiment |
+| Control | audio + lyric sentiment |
+| Alignment-Augmented | audio + lyric sentiment + `alignment_gap` |
 
----
+The four non-baseline models are trained with XGBoost (primary) and Random Forest (robustness check): nine models in total.
 
-## 0. What to expect
+**Decision rule.** Control and Alignment-Augmented differ by one column. The alignment feature counts as a contribution only if the 95% paired bootstrap confidence interval on ΔR² (10,000 test-set resamples) excludes zero.
 
-**What you will receive from us**
+**Result.** The interval contains zero for both algorithms, so the thesis reports **no detectable contribution**. The proposal committed to this reporting rule in advance (Section 4.9.3(A)). Your job is to judge whether this null result is trustworthy: could the pipeline have hidden a real effect, or produced a false null?
 
-- This guide.
-- Our approved thesis proposal (August 2026) as a PDF. Chapter 4, *Design and Methodology*, is the part that matters for your review. Page references in this guide are to that PDF.
-- Read access to the code repository, which contains the dataset, the six modeling notebooks, every result file the thesis cites, and a one-command reproduction script.
+### Where the modeling sits in the project
 
-**How the review runs**
-
-1. You read the methodology (Sections 4.2.2 and 4.9 of the proposal) and this guide.
-2. You decide how deep to go: review the reported figures as given, run the 2-minute quick check, or re-run the whole pipeline. Any of the three is acceptable. Please record which one you chose (form item B1).
-3. You work through the questions in Steps 4 and 5 and fill in the form.
-4. If something is unclear partway through, please ask us rather than guess. Contact details are at the end of this guide.
-5. You return the completed form by the deadline above.
-
-**What we will do with your review**
-
-- Your verdicts and comments are reported **qualitatively** in Section 4.9.3(C) of the thesis, as an independent expert assessment. We will not convert them into a score.
-- Where you mark *Agree with reservations* or *Disagree*, we will report the reservation as you stated it, together with our response or the correction we made. We will not leave it out.
-- If you find an error, we would much rather fix it now than at the defense. Section 8 lists errors we have already found and corrected ourselves.
-- We may contact you with one round of short follow-up questions after reading your comments.
-
-**What you receive in return**
-
-- **Formal acknowledgement in the thesis.** You will be named as the independent Data Scientist validator in Section 4.9.3(C) and in the Acknowledgements. That depends on your consent, which the form in Section 9 asks for, and you can choose to be credited by role only.
-- **Your assessment recorded in the study's validation results.** Your verdicts are reported in the thesis, so your review becomes part of how the study's accuracy claims are judged by the panel.
-- **A copy of the final results.** We will send you the final thesis chapter on the results and the defense outcome once both are available.
-- `[Certificate of appreciation, signed by the adviser — keep or delete]`
-- `[Honorarium or token of appreciation: ________ — keep or delete]`
-
-**What you do not need to do**
-
-- No database, WSL, GPU or audio processing is needed. The modeling stage reads only CSV files committed to the repository.
-- You do not need to look at the web application or the audio-feature extraction pipeline. Section 2 explains why they are out of scope.
-- You do not need to write any code.
-
----
-
-## 1. What we are asking you to judge
-
-Your role is defined in Section 4.9.3(C) of the thesis. It asks two questions:
-
-1. **Is the hyperparameter configuration defensible?** Given the grid search described in Section 4.2.2, is the configuration selected for each algorithm a reasonable choice for this dataset's scale and feature composition?
-2. **Are the reported figures correctly and reproducibly derived?** Do the R², RMSE and MAE figures reported for each model follow, correctly and reproducibly, from that configuration and its training runs?
-
-**What we are *not* asking:** the thesis is explicit that this is *"not a second hyperparameter search or an attempt to improve on the reported figures."* You do not need to find a better model. We are asking whether the figures we report can be trusted, given how they were produced.
-
-Your findings will be reported **qualitatively** in the thesis, separately from the music teacher's review, which checks the audio features themselves.
-
----
-
-## 2. The study, and how your review fits into it
-
-**Research question.** Does the emotional agreement or mismatch between a song's lyrics and its music help predict its Spotify popularity, beyond what the audio and lyric features already provide?
-
-**The engineered feature.** Lyric sentiment is scored with VADER (compound score, range −1 to +1). Spotify's audio `valence` (range 0 to 1) is rescaled to the same range, and the feature is their signed difference:
+| # | Objective (proposal p. 12) | Where | In your review? |
+|---|---|---|---|
+| 1 | Clean the data: 491,632 tracks filtered to popularity > 0, years 2000 to 2023, duplicates removed, valid English lyrics only. 259,458 remain | `notebooks/1_validation`, `2_lyrics_filtering`; `docs/cleaning_process.md` | No (upstream) |
+| 2 | Score lyric sentiment with VADER | `notebooks/3_sentiment_analysis` | No (upstream) |
+| 3 | Compute `alignment_gap`, verified against hand-worked cases (max error 2.2 × 10⁻¹⁶) | `notebooks/3_sentiment_analysis`, `4_behavioral_checks` | No (upstream) |
+| **4** | **Split, tune, train, evaluate, robustness checks** | **`notebooks/5_splits` to `7_model_ladder`, `9_robustness`, `modeling_config.py`** | **Yes** |
+| 5 | SHAP attribution | `notebooks/8_shap` | Comments welcome |
+| 6 | Demo web app | `api/`, `app/` | No |
 
 ```
-valence_normalized = 2 × valence − 1
-alignment_gap      = lyric_sentiment − valence_normalized        range [−2, 2]
+ Kaggle dataset (491,632 tracks)
+        │  notebooks 1 to 2: filtering
+        ▼
+ 259,458 tracks  (notebooks/data_filtered/songs_2000.csv to songs_2023.csv)
+        │  notebook 3: lyric_sentiment, alignment_gap
+        │  notebook 4: formula and behavioral checks
+        ▼
+ ┌─────────────────── YOUR REVIEW ───────────────────┐
+ │  notebook 5   artist-disjoint 70/15/15 split       │
+ │  notebook 6   grid searches                        │
+ │  notebook 7   nine models, bootstrap ΔR²           │
+ │  notebook 9   robustness checks                    │
+ └───────────────────────┬───────────────────────────┘
+        │  notebook 8: SHAP
+        │  scripts/export_popularity_model.py
+        ▼
+ Demo app: POST /predict serves this same XGBoost model
 ```
 
-Positive means the lyrics read brighter than the music sounds; negative means the reverse.
+**The demo app is out of scope, with one exception.** Its `/predict` endpoint serves the exact model you are reviewing. The export script only writes that model file if it matches notebook 7's test predictions to within 10⁻⁴. The rest of the app estimates audio descriptors from raw audio for new songs; that is validated separately (on 66 real songs, estimation error moves the prediction by 2.65 points on average, against a model RMSE of about 15). Ignore `api/`, `app/` and `scripts/` except `export_popularity_model.py`.
 
-**Data.** 259,458 English-language tracks released 2000–2023, from the Kaggle *490K Spotify Song Audio Embeddings & Metadata* dataset. Tracks with zero popularity or unusable lyrics were excluded. The target is Spotify `popularity` (0–100), treated as a regression problem.
+**A separate music teacher reviews the audio features** (key, mode and valence on 15 sample tracks). You do not need to look at that material.
 
-**The model ladder.** Five feature configurations, which differ only in which inputs they receive:
-
-| Model | Features | Purpose |
-|---|---|---|
-| Baseline | none; predicts the training-set mean | establishes the R² = 0 floor |
-| Audio-Only | the twelve Spotify audio descriptors (key one-hot encoded) | audio's standalone contribution |
-| Lyric-Only | VADER lyric sentiment | lyrics' standalone contribution |
-| **Control** | audio + lyric sentiment | the comparison point |
-| **Alignment-Augmented** | audio + lyric sentiment + `alignment_gap` | the full model |
-
-The four models with features are each trained twice: with **XGBoost** (the primary algorithm) and with **Random Forest** (a robustness check). With the shared Baseline, that makes **nine trained models**.
-
-**The decision rule.** The central comparison is Control vs Alignment-Augmented, which differ by exactly one column. A contribution counts as established only if the **95% paired bootstrap confidence interval on ΔR²** (10,000 resamples of the test set) excludes zero.
-
-**The result.** The interval contains zero under both algorithms, so the thesis reports **no detectable contribution** from the alignment feature. The reference figures are in Section 6.
-
-**A note on the null result.** The thesis committed in advance (Section 4.9.3(A)) to reporting a gain that does not survive resampling as "no detectable contribution". The headline figure is therefore not something we are trying to defend as a positive finding. What we need from you is a judgement on whether the *null* is trustworthy: whether the pipeline could plausibly have hidden a real effect, or manufactured the absence of one.
-
-### The whole project: six objectives, one pipeline
-
-The thesis has six specific objectives (proposal Section 1.2.2, p. 12). Your review covers Objective 4 directly. The others either produce its inputs or consume its output, so this table shows what each one did and where it lives:
-
-| # | Objective | What was done | Where in the repository | Your review? |
-|---|---|---|---|---|
-| 1 | Extract and preprocess the data | Kaggle dataset `serkantysz/490k-spotify-song-audio-embeddings-and-metadata` (491,632 tracks) filtered to popularity > 0, release years 2000–2023, de-duplicated by (name, artists), and restricted to valid English lyrics (at least 20 words, language-detected, placeholders and metadata stripped). **259,458 tracks retained** | `notebooks/1_validation.ipynb`, `2_lyrics_filtering.ipynb`; documented step by step in `docs/cleaning_process.md` | Upstream. It defines the corpus, but is not under review |
-| 2 | Score lyric sentiment | VADER compound score per track, range −1 to +1. AFINN, pysentimiento and RoBERTa were compared on samples as cross-checks only | `notebooks/3_sentiment_analysis.ipynb` | Upstream |
-| 3 | Engineer the alignment feature | `alignment_gap = lyric_sentiment − (2 × valence − 1)`, verified against hand-computed reference cases and over the whole corpus (maximum deviation 2.2 × 10⁻¹⁶) | `3_sentiment_analysis.ipynb` computes it; `4_behavioral_checks.ipynb` verifies it | Upstream, but see "What the earlier stages already show" below |
-| **4** | **Train and evaluate the models** | **Artist-disjoint split, two grid searches, nine models, paired bootstrap, robustness checks** | **`notebooks/5_splits` … `7_model_ladder`, `9_robustness`, `modeling_config.py`** | **Yes. This is your review** |
-| 5 | SHAP attribution | TreeSHAP on the XGBoost Alignment-Augmented model, grouped by feature family | `notebooks/8_shap.ipynb` | Context. The figures are in Section 6, and comments are welcome |
-| 6 | Demonstration application | A web app: upload a song plus lyrics, estimate its audio descriptors, score its sentiment and alignment, and show a predicted popularity with a SHAP breakdown | `api/` (FastAPI backend), `app/` (Next.js frontend) | Out of scope, with one link to your review (below) |
-
-**The end-to-end flow:**
-
-```
- Kaggle Spotify dataset (491,632 tracks: Spotify audio descriptors, lyrics, genre, popularity)
-        │
-        ▼  Objective 1: notebooks 1–2      popularity > 0, 2000–2023, de-duplication, English lyrics
- 259,458 tracks  (notebooks/data_filtered/songs_2000.csv … songs_2023.csv)
-        │
-        ▼  Objectives 2–3: notebook 3      VADER lyric_sentiment, valence_norm, alignment_gap
-        │
-        ▼  notebook 4                      formula verified, behavioural checks (§4.9.3 D)
-        │
- ┌──────┴───────────── YOUR REVIEW (§4.9.3 C) ──────────────┐
- │  notebook 5   artist-disjoint 70/15/15 split              │
- │  notebook 6   XGBoost and Random Forest grid searches     │
- │  notebook 7   nine models, verification, bootstrap ΔR²    │
- │  notebook 9   seed, CV, hyperparameter, cross-algorithm   │
- └──────┬───────────────────────────────────────────────────┘
-        │
-        ├──▶ notebook 8: SHAP attribution (Objective 5)
-        │
-        ▼  scripts/export_popularity_model.py   retrains and verifies against notebook 7
- models/popularity/xgboost_alignment_augmented.json
-        │
-        ▼  Objective 6: demo application        POST /predict serves this exact model
-```
-
-**The one link between your review and the demo application.** The demo's popularity prediction (`POST /predict`, in `api/services/`) serves the same XGBoost Alignment-Augmented model you are reviewing. It is not a separate model. `scripts/export_popularity_model.py` (your quick check in Step 3) produces the file the app loads, and it refuses to write it unless the retrained model matches notebook 7's test predictions to within 10⁻⁴. If you confirm the reported figures, you are also confirming the model the demo serves.
-
-Everything else in the demo app is out of scope. For a new song there are no Spotify descriptors, so the app *estimates* them from raw audio (`api/pipelines/demo/`, using pretrained audio embeddings and regression heads fit against Spotify's own values). Those estimates are validated separately against 66 real songs whose Spotify values are known. On that sample, estimation error moves the predicted popularity by **2.65 points on average** (median 1.99, maximum 8.54), small next to the model's own ~15-point RMSE (`docs/feature_extraction_calibration.md`). The proposal treats demo predictions as illustrative (Section 1.4). None of this feeds the figures you are reviewing. You can ignore `api/`, `app/` and everything under `scripts/` except `export_popularity_model.py`.
-
-**The two expert reviews.** The proposal (Section 4.9.3(C), pp. 84–86) splits expert validation between two reviewers. Their findings are reported separately:
-
-| | Music teacher | Data scientist (you) |
-|---|---|---|
-| Checks | Whether the audio descriptors the alignment score is built from (principally key, mode and valence) are musicologically defensible | Whether the hyperparameter configuration is defensible, and whether the reported R², RMSE and MAE are correctly and reproducibly derived |
-| Material | A stratified sample of 15 dataset tracks with their recordings (`samples/validation_sample.csv`, `samples/Track Validation Sheet.xlsx`) | The modeling notebooks, artifacts and reproduction script |
-| Layer of the pipeline | The model's inputs | The model and its reported accuracy |
-
-You don't need to look at the music teacher's materials. They are listed so you can see the full validation design.
-
-**What the earlier stages already show** (`notebooks/artifacts/behavioral_checks.json`, from notebook 4). These numbers set expectations for the result you are reviewing:
+**Context from notebook 4** (`behavioral_checks.json`):
 
 | Check | Result |
 |---|---|
-| Correlation of `alignment_gap` with lyric sentiment | 0.857 (Pearson) |
-| Correlation of `alignment_gap` with valence | −0.393 |
-| Correlation of `alignment_gap` with popularity | 0.019 |
-| Tracks whose lyrics and music "agree" (\|gap\| ≤ 0.5) | 29.3%. Mismatch is the norm, consistent with the literature the proposal cites (Attia, 2025) |
-| Gap distribution | mean +0.32, standard deviation 0.93, 62% of tracks positive (lyrics brighter than the music) |
+| Correlation of `alignment_gap` with lyric sentiment | 0.857 |
+| Correlation with valence | −0.393 |
+| Correlation with popularity | 0.019 |
+| Tracks where lyrics and music agree (\|gap\| ≤ 0.5) | 29.3% |
 
-The alignment score is largely a rescaled lyric-sentiment score. It is also, by construction, an exact linear combination of two columns the Control model already receives. The proposal argues (Section 4.2.2, p. 61) that supplying the difference explicitly still helps shallow trees, because a tree can isolate it in one split instead of approximating it with a staircase of many. The null result is evidence on that argument. Section 7, item 10, asks for your view.
-
----
-
-## 3. What you need
-
-| | |
-|---|---|
-| Access | the GitHub repository <https://github.com/grenappl/thesis-project>. It is public, so no invite or account is needed |
-| The proposal document | *de Pedro, Ruelan — Approved Proposal Document* (PDF, sent with this guide). Chapter 4, especially Sections 4.2.2 and 4.9 |
-| Software | Git, Python 3.13, and [`uv`](https://docs.astral.sh/uv/). Windows, macOS and Linux all work |
-| Hardware | any recent CPU; **no GPU needed**. 16 GB RAM recommended |
-| Disk | about 15 GB free: roughly 0.5 GB for the repository and dataset, several GB for the Python environment, and several GB more for the Random Forest models if you do the full re-run |
-| Not needed | No database, no WSL, and no audio processing. The modeling pipeline reads only the committed CSV files |
+The gap is mostly a rescaled sentiment score, and it is an exact combination of two columns Control already has. Section 7, item 10 asks for your view on what that means for the test.
 
 ---
 
-## 4. Setup (about 15–20 minutes, mostly downloading)
+## 4. Setup
+
+You need Git, Python 3.13, [`uv`](https://docs.astral.sh/uv/), 16 GB RAM and about 15 GB of free disk. Any OS works.
 
 ```bash
 git clone https://github.com/grenappl/thesis-project.git
@@ -197,53 +130,50 @@ cd thesis-project
 uv sync
 ```
 
-The dataset (`notebooks/data_filtered/songs_2000.csv` … `songs_2023.csv`, about 400 MB) is part of the repository, so no separate download is needed.
+The repository is public. The dataset (about 400 MB) is included.
 
-**Why `uv sync` downloads so much.** The project's environment also serves the demo application, so it pulls in PyTorch, Hugging Face Transformers and (on Linux) TensorFlow. The modeling notebooks don't use them, but installing the locked environment as a whole is what makes the reproduction exact. Please use `uv sync` rather than installing packages by hand. `uv.lock` pins every version, including `xgboost`, `scikit-learn` and `networkx`, and the artist split uses `networkx`'s Louvain implementation, which is only reproducible under a fixed version.
+`uv sync` takes 15 to 20 minutes because the environment includes PyTorch and Transformers for the demo app. Use it anyway: `uv.lock` pins every version, and the artist split depends on the exact `networkx` version.
 
-**Which documents to trust.** For your review, the authoritative sources are the approved proposal, this guide, and the files in `notebooks/` and `notebooks/artifacts/`. The repository also contains `MODELING_REPORT.md`, a planning document written *before* the pipeline was run. Its Section 4 describes an earlier split design (primary-artist grouping with an edge cut) that was later replaced by the community-detection split described here. Please disregard that section.
+**Ignore Section 4 of `MODELING_REPORT.md`.** It is a pre-run planning note describing an older split design. The current split is the one in notebook 5 and this guide.
 
 ---
 
-## 5. Step-by-step review
+## 5. Review steps
 
-### Step 1 — Read the methodology (about 30 minutes)
+### Step 1. Read the proposal (30 minutes)
 
-In the proposal PDF, read:
-
-| Section | Pages | What it covers |
+| Section | Pages | Content |
 |---|---|---|
-| 4.2.1 (end) | 59–61 | The alignment formula and the artist-aware 70/15/15 split |
-| **4.2.2** | **61–66** | Model training: why XGBoost and Random Forest, the two hyperparameter grids (p. 63), the model ladder (Table 5, p. 64), the metrics, and why R² is primary |
-| 4.9.1–4.9.2 | 79–81 | Verification (what is asserted in code) and testing (seed, cross-validation, hyperparameter and cross-algorithm robustness) |
-| **4.9.3(A)** | **82–84** | The paired bootstrap decision rule, and **Table 11** (p. 83): the result ranges we committed to *before* training |
-| **4.9.3(C)** | **84–86** | Your role, in the proposal's own words |
+| 4.2.1 (end) | 59 to 61 | Alignment formula, artist-aware split |
+| 4.2.2 | 61 to 66 | Algorithms, hyperparameter grids (p. 63), model ladder (Table 5), metrics |
+| 4.9.1 to 4.9.2 | 79 to 81 | Verification and robustness testing |
+| 4.9.3(A) | 82 to 84 | Bootstrap decision rule; **Table 11** (p. 83), the expected ranges set before training |
+| 4.9.3(C) | 84 to 86 | Your role |
 
-**One wording error in the proposal.** The first sentence of Section 4.2.2 (p. 61) calls the twelve audio descriptors "self-computed". That is wrong. The modeling stage uses the descriptors Spotify computed and distributed with the dataset, as Section 4.3 (p. 66) and the code both state. Self-computed descriptors appear only in the demo application, which is out of scope (Section 2). Please read the proposal with that correction in mind.
+**Correction:** p. 61 calls the audio descriptors "self-computed". They are not. The models use the descriptors Spotify supplies in the dataset (see Section 4.3, p. 66).
 
-### Step 2 — Get oriented in the code (about 20 minutes)
+### Step 2. Read the code (20 minutes)
 
-The modeling pipeline is six Jupyter notebooks plus one shared module, all in `notebooks/`. They run in order; each one reads what the previous one wrote to `notebooks/artifacts/`.
+All in `notebooks/`. Each notebook reads what the previous one wrote to `notebooks/artifacts/`.
 
-| File | What it does |
+| File | Content |
 |---|---|
-| `modeling_config.py` | **Read this first.** Shared definitions: the twelve descriptors, the ladder (`LADDER`), the columns that must never reach a model (`FORBIDDEN_COLS`), the metric functions (`regression_metrics`), and the artist-disjoint split (`community_partition`) |
-| `4_behavioral_checks.ipynb` | Sanity checks on the engineered feature (formula correctness, distribution). Optional for your review |
-| `5_splits.ipynb` | The 70/15/15 train/validation/test split. No artist appears in more than one partition; this is asserted in code |
-| `6_tuning.ipynb` | The two grid searches, selected on validation RMSE |
-| `7_model_ladder.ipynb` | Trains the nine models, verifies them, and computes the bootstrap confidence interval. **This is where the headline figures come from** |
-| `8_shap.ipynb` | SHAP feature attribution on the XGBoost Alignment-Augmented model |
-| `9_robustness.ipynb` | Seed, cross-validation, hyperparameter and cross-algorithm robustness checks |
+| `modeling_config.py` | Start here. Feature lists, the model ladder, forbidden columns, metric functions, the split function |
+| `5_splits.ipynb` | Artist-disjoint 70/15/15 split, with assertions |
+| `6_tuning.ipynb` | Both grid searches |
+| `7_model_ladder.ipynb` | The nine models, verification cell, bootstrap. Headline figures come from here |
+| `8_shap.ipynb` | SHAP on the XGBoost Alignment-Augmented model |
+| `9_robustness.ipynb` | Seed, CV, hyperparameter and cross-algorithm checks |
 
-Things worth checking directly in the code:
+Check these three things in the code:
 
-- **Feature isolation:** the Control model's columns must not include `alignment_gap`. This is asserted in notebook 7, in the verification cell.
-- **Metrics:** R², RMSE and MAE are computed directly in `regression_metrics`, not through a library helper, so the values don't depend on the scikit-learn version.
-- **The bootstrap:** `paired_bootstrap_delta_r2` in notebook 7. Each resample scores both models on the same rows, and R² is recomputed within each resample.
+- Control's columns exclude `alignment_gap` (asserted in notebook 7's verification cell).
+- R², RMSE and MAE are computed by hand in `regression_metrics`, not by a library call.
+- `paired_bootstrap_delta_r2` (notebook 7) scores both models on the same resampled rows.
 
-### Step 3 — Reproduce the results (optional, but the strongest check)
+### Step 3. Reproduce the results (optional)
 
-**Quick check, about 2 minutes.** This retrains the primary model (XGBoost Alignment-Augmented) from the frozen configuration and compares its predictions on all 37,632 test tracks against the predictions saved by notebook 7:
+**Quick check (2 minutes).** Retrains the main model and compares it with notebook 7's saved test predictions:
 
 ```bash
 uv run python scripts/export_popularity_model.py
@@ -259,11 +189,9 @@ wrote models/popularity/xgboost_alignment_augmented.json
 wrote models/popularity/model_metadata.json
 ```
 
-A maximum difference of around 10⁻⁶ is float32 rounding. Anything above 10⁻⁴ means the result did not reproduce. In that case the script prints `FAIL` and writes nothing. This check has passed on two separate machines; the most recent run (16 October 2026) gave a maximum difference of 1.9 × 10⁻⁶ and took under 2 minutes.
+A difference near 10⁻⁶ is float32 rounding. Above 10⁻⁴, the script prints `FAIL` and writes nothing. Our last run (16 October 2026) gave 1.9 × 10⁻⁶. Stopping at round 517 rather than 549 is expected: 549 is where Control stopped during tuning, and each model early-stops on its own.
 
-The model stops at round 517 here, not the 549 recorded in `config_xgb.json`. That is expected: 549 is where the *Control* model stopped during tuning, and each model early-stops on its own (Section 7, item 2). The two `wrote` lines refer to the copy of the model used by the demo application. Writing them changes nothing you are reviewing.
-
-**Full check, about 40 minutes on CPU.** Run notebooks 5 to 9 in order. Either open them in VS Code or Jupyter and choose **Run All**, or run them from the terminal:
+**Full check (about 40 minutes).** Run notebooks 5 to 9 in order, using Run All in Jupyter or VS Code, or:
 
 ```bash
 for nb in 5_splits 6_tuning 7_model_ladder 8_shap 9_robustness; do
@@ -272,65 +200,57 @@ for nb in 5_splits 6_tuning 7_model_ladder 8_shap 9_robustness; do
 done
 ```
 
-That loop is bash (macOS, Linux, or Git Bash on Windows). In PowerShell, run the `uv run ... nbconvert ...` line once per notebook, in the same order.
+(In PowerShell, run the `uv run` line once per notebook.) Compare the new values with Section 6. R² should match to 4 decimal places, RMSE and MAE to 2.
 
-Approximate times on our machine: notebook 5 about 2 minutes, notebook 6 about 10, notebook 7 about 15, notebook 8 about 3, notebook 9 about 10. Random Forest fits take most of that time; individual XGBoost fits take seconds.
+### Step 4. Judge the configuration
 
-This regenerates `notebooks/artifacts/` in your copy. That's intended; your copy is disposable. Then compare the new values against the reference figures in Section 6. They should agree to **4 decimal places for R²** and **2 decimal places for RMSE and MAE**. The last digits of individual predictions can differ slightly because of float32 rounding, so compare the summary figures rather than running `git diff` on the prediction files.
+Evidence: `tuning_results.csv`, `config_xgb.json`, `config_rf.json`, and Section 7.
 
-### Step 4 — Assess the configuration
+- XGBoost grid: `max_depth` {4, 6, 8} × `learning_rate` {0.01, 0.05, 0.1}, up to 1,000 rounds with 50-round early stopping, `subsample` and `colsample_bytree` fixed at 0.8. Reasonable for 179,000 rows and 25 features?
+- Random Forest grid: `n_estimators` {200, 500} × `min_samples_leaf` {1, 5}, unlimited depth, `max_features` = ⌊p/3⌋. Reasonable?
+- Is one fixed 15% validation partition, instead of k-fold CV, acceptable at this scale?
+- Is tuning on Control and reusing that configuration for every model fair?
 
-The evidence for this step is in `notebooks/artifacts/tuning_results.csv` (every grid run), `config_xgb.json` and `config_rf.json` (the selected configurations), and Section 7 below, which lists the judgement calls we made.
+### Step 5. Judge the derivation
 
-Questions to consider:
+Evidence: your Step 3 run (or Section 6), notebook 7's verification cell, notebook 5's assertions.
 
-- Is the XGBoost grid (`max_depth` {4, 6, 8} × `learning_rate` {0.01, 0.05, 0.1}, up to 1,000 rounds with 50-round early stopping, `subsample` and `colsample_bytree` fixed at 0.8) reasonable for about 179,000 training rows and 25 features?
-- Is the Random Forest grid (`n_estimators` {200, 500} × `min_samples_leaf` {1, 5}, unrestricted depth, `max_features` = ⌊p/3⌋) reasonable?
-- Is selecting on a single fixed 15% validation partition, rather than k-fold cross-validation, defensible at this scale?
-- Is it appropriate to tune on the **Control** configuration and then reuse that configuration for every model in the ladder? See Section 7.
+- Do the figures reproduce?
+- Is the split free of artist leakage?
+- Is the paired bootstrap on ΔR² a valid decision rule here?
+- Do the robustness results support "no detectable contribution"?
 
-### Step 5 — Assess the derivation
+### Step 6. Fill in the form
 
-The evidence for this step is the reproduction in Step 3 (or the reference figures, if you skip it), notebook 7's verification cell, and notebook 5's split assertions.
-
-Questions to consider:
-
-- Do the reported figures reproduce?
-- Is the split free of leakage? (Artist-disjoint, with popularity and genre balanced across partitions.)
-- Is the paired bootstrap on ΔR² a valid decision rule for this comparison?
-- Do the robustness results support the reported conclusion of "no detectable contribution"?
-
-### Step 6 — Fill in the review form
-
-Use Section 9 of this guide. Short comments are fine. Where you disagree or have reservations, please say why, because that is what we will report.
+Use Section 9. Short comments are fine. Explain any reservation or disagreement, since that is what we report.
 
 ---
 
 ## 6. Reference figures
 
-These are the figures reported in the thesis. All come from `notebooks/artifacts/`.
+All from `notebooks/artifacts/`.
 
-### The split (`manifest.json`)
+### Split (`manifest.json`)
 
 | Partition | Tracks | Share | Mean popularity |
 |---|---|---|---|
 | Train | 179,218 | 70.4% | 24.53 |
 | Validation | 37,784 | 14.8% | 23.78 |
 | Test | 37,632 | 14.8% | 23.97 |
-| Excluded (collaborations spanning partitions) | 4,824 | 1.86% of corpus | — |
+| Excluded (collaborations spanning partitions) | 4,824 | 1.86% of corpus | n/a |
 
-No artist appears in more than one partition, counting featured artists as well as headliners. Genre shares stay within 1.95 percentage points of the full corpus.
+No artist, including featured artists, appears in more than one partition. Genre shares are within 1.95 percentage points of the full corpus.
 
-### Tuning (`tuning_results.csv`, selected on validation RMSE)
+### Tuning (`tuning_results.csv`)
 
-| Algorithm | Selected configuration | Validation RMSE |
+| Algorithm | Selected | Validation RMSE |
 |---|---|---|
 | XGBoost | `max_depth` 4, `learning_rate` 0.05 (best round 549) | 14.6408 |
 | Random Forest | `n_estimators` 500, `min_samples_leaf` 5 | 14.7127 |
 
-All nine XGBoost configurations fell between 14.641 and 14.690 validation RMSE, so the grid is close to flat.
+All nine XGBoost settings scored between 14.641 and 14.690, so the grid is nearly flat.
 
-### The nine models, on the held-out test set (`ladder_metrics.csv`)
+### Test-set results (`ladder_metrics.csv`)
 
 | Algorithm | Model | Features | R² | RMSE | MAE |
 |---|---|---|---|---|---|
@@ -344,92 +264,88 @@ All nine XGBoost configurations fell between 14.641 and 14.690 validation RMSE, 
 | Random Forest | Control | 24 | 0.0623 | 15.137 | 12.166 |
 | Random Forest | Alignment-Augmented | 25 | 0.0626 | 15.135 | 12.160 |
 
-The 23 audio columns are the eleven non-key descriptors plus twelve one-hot key columns.
+23 audio columns = eleven descriptors plus twelve one-hot key columns.
 
-### The central comparison (`central_comparison.json`)
+### Central comparison (`central_comparison.json`)
 
-| Algorithm | ΔR² (Augmented − Control) | 95% bootstrap CI | Excludes zero? |
+| Algorithm | ΔR² (Augmented minus Control) | 95% bootstrap CI | Excludes zero? |
 |---|---|---|---|
 | XGBoost | −0.00042 | [−0.00115, +0.00032] | No |
 | Random Forest | +0.00027 | [−0.00072, +0.00123] | No |
 
-### Against the ranges committed to in advance (proposal Table 11, p. 83)
+### Against proposal Table 11 (p. 83)
 
-| Quantity | Expected (Table 11) | Observed (XGBoost) | Reading |
+| Quantity | Expected | Observed (XGBoost) | Reading |
 |---|---|---|---|
-| Baseline R² | ≈ 0.00, possibly slightly negative | −0.0013 | As expected |
-| Control R² | 0.05 – 0.20 | 0.0683 | Inside the range, at its low end. Clears the 0.05 "investigate the pipeline" threshold and is far below the 0.20 "re-verify for leakage" threshold |
-| Control RMSE | 15 – 20 popularity points | 15.09 | Inside the range |
-| ΔR² (Augmented − Control) | 0.001 – 0.01 | −0.0004 (−0.61% of Control R²) | Below the expected range |
-| 95% bootstrap CI on ΔR² | decides the outcome | [−0.0011, +0.0003] | Contains zero, so the result is reported as **no detectable contribution** |
-
-The two diagnostic thresholds in Table 11 exist to catch a broken pipeline: a Control R² below 0.05 would suggest no usable signal, and one above 0.20 would suggest leakage. Neither was triggered.
+| Baseline R² | about 0, possibly slightly negative | −0.0013 | As expected |
+| Control R² | 0.05 to 0.20 | 0.0683 | In range. Above the 0.05 "broken pipeline" threshold, well below the 0.20 "possible leakage" threshold |
+| Control RMSE | 15 to 20 | 15.09 | In range |
+| ΔR² | 0.001 to 0.01 | −0.0004 (−0.61% of Control R²) | Below range |
+| 95% CI on ΔR² | decides the outcome | [−0.0011, +0.0003] | Contains zero: no detectable contribution |
 
 ### Robustness (`robustness_summary.json`)
 
 | Check | Result |
 |---|---|
-| Seed sensitivity (5 seeds) | ΔR² per seed: −0.00042, +0.00058, −0.00106, +0.00096, −0.00084. Its mean (−0.00016) is smaller than the seed-to-seed R² standard deviation (0.00051) |
-| 5-fold artist-disjoint CV | ΔR² per fold: +0.00151, −0.00086, −0.00049, −0.00039, +0.00063. Control R² per fold ranges from 0.023 to 0.165 |
-| Hyperparameter settings (4) | ΔR²: −0.00042 (selected), +0.00031, −0.00098, −0.00018. The sign is not consistent |
-| XGBoost vs Random Forest | opposite signs |
+| 5 seeds | ΔR²: −0.00042, +0.00058, −0.00106, +0.00096, −0.00084. Mean (−0.00016) is smaller than the seed-to-seed R² standard deviation (0.00051) |
+| 5-fold artist-disjoint CV | ΔR²: +0.00151, −0.00086, −0.00049, −0.00039, +0.00063. Control R² ranges 0.023 to 0.165 across folds |
+| 4 hyperparameter settings | ΔR²: −0.00042 (selected), +0.00031, −0.00098, −0.00018. No consistent sign |
+| XGBoost vs Random Forest | Opposite signs |
 
-### SHAP attribution (`shap_group_contributions.csv`, `shap_feature_ranks.csv`)
+### SHAP (`shap_group_contributions.csv`, `shap_feature_ranks.csv`)
 
-The twelve audio descriptors account for 91.5% of mean |SHAP|, lyric sentiment for 6.7%, and the alignment score for 1.7%. `alignment_gap` ranks 13th of 14 individual features.
+Audio descriptors: 91.5% of mean |SHAP|. Lyric sentiment: 6.7%. Alignment score: 1.7%, ranking 13th of 14 features.
 
 ---
 
-## 7. Decisions we would like you to scrutinise
+## 7. Decisions to check
 
-These are the judgement calls in the pipeline. Some are not fully documented in the thesis text yet. We would rather you examine them directly than come across them.
+These are judgement calls we made. Some are not yet stated in the proposal.
 
-1. **Tuning was done on the Control configuration.** Section 4.2.2 does not say which configuration the grid search runs on. We chose Control so the hyperparameters could not be selected in the treatment model's favour. The selected configuration was then reused, unchanged, for all nine models.
-2. **Early stopping runs separately for each model.** All models share the frozen configuration, but each XGBoost model early-stops against the same validation partition, so the number of boosting rounds differs between models. We treat the round count as a result of early stopping rather than a tuned hyperparameter.
-3. **Random Forest's `max_features` changes with the feature count.** It is ⌊p/3⌋ (Breiman's convention for regression), and p differs between models; Lyric-Only has p = 1. This follows from the rule rather than being re-tuned, but it does mean the parameter value differs between models.
-4. **The artist-disjoint split uses community detection.** Taken literally, Section 4.9.1 requires no artist to appear in two partitions. Collaborations chain artists together: one connected group holds 51% of all tracks, so grouping on connected groups would make a 70/15/15 split badly unrepresentative. Instead, we detect collaboration communities (Louvain), place each community whole into one partition while balancing size, genre and popularity, and exclude the 1.86% of tracks whose artists span partitions. These excluded tracks are not random: they are all collaborations, more often Electronic and Hip-Hop, and more popular on average (33.6 vs 24.3).
-5. **No feature scaling or target transformation.** Tree ensembles don't need scaling. Popularity is modeled on its raw 0–100 scale.
-6. **Features deliberately excluded:** release year (recency is excluded by design), genre (used only for stratification), and artist follower and popularity counts (they would leak artist identity). These exclusions are asserted in code.
-7. **The bootstrap resamples a single test partition.** It cannot capture variation that comes from the split itself. The 5-fold CV in notebook 9 covers that, and absolute R² turns out to depend heavily on the partition (0.023 to 0.165).
-8. **Two grid points hit the round cap.** Both `learning_rate = 0.01` configurations stopped at round 998 or 999 of 1,000 (`tuning_results.csv`), so early stopping never triggered for them, and their validation RMSE may be slightly pessimistic. We did not raise the cap. The whole XGBoost grid spans only 0.05 RMSE points, and the robustness check's "deeper, slower" setting (`max_depth` 6, `learning_rate` 0.01) leaves the conclusion unchanged. You may still judge that the cap should have been higher.
-9. **Absolute R² is low, and that is expected.** About 0.07 on the test set is at the low end of Table 11's expected range. Popularity depends heavily on things no model here receives, such as artist reach, marketing and playlisting. Artist-identity features are excluded on purpose (item 6), and the artist-disjoint split stops the model from memorising artists. The thesis's question is the *difference* between Control and Alignment-Augmented, not the absolute level.
-10. **The engineered feature is a linear combination of existing inputs.** `alignment_gap` is computed exactly from `lyric_sentiment` and `valence`, and Control already receives both. The proposal's case for adding it anyway (p. 61) is that trees split on one feature at a time, so a difference of two features is easier to use when it is supplied directly. Given the null result and the 0.857 correlation with lyric sentiment, is this ablation still a fair test of the feature? Or does it, by design, mostly test whether XGBoost and Random Forest can already recover the difference on their own? Either answer is reportable. We would value your view in the free-text comments.
+1. **Tuning used the Control configuration.** The proposal does not specify which. We chose Control so tuning could not favour the treatment model. The result was reused for all nine models.
+2. **Each model early-stops on its own.** The configuration is shared, but XGBoost's round count differs per model. We treat it as an outcome of early stopping, not a tuned value.
+3. **Random Forest `max_features` = ⌊p/3⌋ varies with feature count.** Lyric-Only has p = 1.
+4. **The split uses community detection.** Collaborations link artists into one group covering 51% of tracks, so splitting by connected groups would give an unrepresentative split. We detect collaboration communities (Louvain), assign whole communities to partitions while balancing size, genre and popularity, and drop the 1.86% of tracks whose artists end up in different partitions. Dropped tracks are all collaborations, more often Electronic and Hip-Hop, and more popular on average (33.6 vs 24.3).
+5. **No feature scaling or target transformation.** Popularity is modeled on its raw 0 to 100 scale.
+6. **Excluded features:** release year, genre (stratification only), and artist follower and popularity counts (they leak artist identity). Asserted in code.
+7. **The bootstrap uses one test partition**, so it cannot capture split-to-split variation. The 5-fold CV covers that, and shows absolute R² depends heavily on the partition (0.023 to 0.165).
+8. **Two grid points hit the round cap.** Both `learning_rate` 0.01 settings stopped at round 998 or 999 of 1,000, so early stopping never triggered. We did not raise the cap, because the whole grid spans only 0.05 RMSE and the robustness check at `learning_rate` 0.01 does not change the conclusion. Tell us if you think the cap should have been higher.
+9. **Absolute R² is low (about 0.07).** Popularity depends heavily on artist reach, marketing and playlisting, none of which the models receive. The thesis tests the difference between two models, not the absolute level.
+10. **`alignment_gap` is an exact combination of two Control inputs.** The proposal argues (p. 61) that trees use a difference more easily when it is supplied directly. Given the null result and the 0.857 correlation with sentiment, is the ablation still a fair test of the feature, or mainly a test of whether the trees already recover the difference? Please comment.
 
-## 8. Corrections already made
+## 8. Errors we already fixed
 
-For transparency, here are two errors we found in our own pipeline and corrected before this review:
+1. **Per-popularity-band R².** Inside a 20-point band, popularity barely varies, so R² was meaningless (−320 for the top band). That table now reports RMSE and MAE only.
+2. **A duplicate hyperparameter setting.** One "alternative" in the robustness check was identical to the selected configuration. We replaced it, and the hyperparameter check no longer shows a consistent direction. The notebook now asserts that no alternative equals the selected one.
 
-1. **Per-popularity-band metrics.** The first version reported R² within narrow popularity bands. Within a 20-point band the target barely varies, so R² collapsed to meaningless values (−320 for the top band). The band table now reports RMSE and MAE only.
-2. **A duplicated hyperparameter setting.** The robustness check's list of alternative settings was written before tuning ran, and one "alternative" turned out to be identical to the selected configuration. It was replaced with a genuinely different setting. This **changed one conclusion**: the hyperparameter check had appeared to show a consistent direction, and with the fix it no longer does. The notebook now asserts that no alternative can equal the selected configuration.
-
-Neither correction required retraining the nine reported models, and neither changes the headline result.
+Neither fix required retraining the nine models or changed the headline result.
 
 ---
 
 ## 9. Review form
 
-For each item, enter one verdict: **Agree**, **Agree with reservations**, **Disagree**, or **Not assessed**. Add a comment wherever the verdict isn't a plain *Agree*.
+For each statement, mark **Agree**, **Agree with reservations**, **Disagree** or **Not assessed**. Add a comment for anything other than Agree.
 
-### A. The hyperparameter configuration
-
-| # | Statement | Verdict | Comments |
-|---|---|---|---|
-| A1 | The XGBoost search space is appropriate for this dataset's size and features. | | |
-| A2 | The Random Forest search space is appropriate for this dataset's size and features. | | |
-| A3 | Selecting the configuration on a single fixed 15% validation partition is defensible at this scale. | | |
-| A4 | Tuning on the Control configuration, and reusing that configuration for every model, keeps the central comparison fair. | | |
-| A5 | The selected configurations are a defensible choice overall. | | |
-
-### B. Derivation of the reported figures
+### A. Hyperparameter configuration
 
 | # | Statement | Verdict | Comments |
 |---|---|---|---|
-| B1 | The reported R², RMSE and MAE figures reproduce from the configuration. *(Note whether you ran the quick check, the full check, or reviewed the figures only.)* | | |
+| A1 | The XGBoost search space suits this dataset's size and features. | | |
+| A2 | The Random Forest search space suits this dataset's size and features. | | |
+| A3 | Selecting on a single fixed 15% validation partition is defensible at this scale. | | |
+| A4 | Tuning on Control and reusing that configuration for every model keeps the comparison fair. | | |
+| A5 | The selected configurations are defensible overall. | | |
+
+### B. Reported figures
+
+| # | Statement | Verdict | Comments |
+|---|---|---|---|
+| B1 | The reported R², RMSE and MAE reproduce from the configuration. *(State whether you ran the quick check, the full check, or reviewed the figures only.)* | | |
 | B2 | The metrics are computed correctly. | | |
-| B3 | The train/validation/test split is free of artist-identity leakage. | | |
-| B4 | The 1.86% exclusion of cross-partition collaborations is acceptable and adequately reported. | | |
-| B5 | The paired bootstrap confidence interval on ΔR² is a valid decision rule for this comparison. | | |
-| B6 | The robustness checks support the conclusion of "no detectable contribution". | | |
+| B3 | The split is free of artist-identity leakage. | | |
+| B4 | Excluding the 1.86% of cross-partition collaborations is acceptable and adequately reported. | | |
+| B5 | The paired bootstrap CI on ΔR² is a valid decision rule for this comparison. | | |
+| B6 | The robustness checks support "no detectable contribution". | | |
 
 ### C. Overall
 
@@ -437,14 +353,14 @@ For each item, enter one verdict: **Agree**, **Agree with reservations**, **Disa
 |---|---|---|---|
 | C1 | The reported model accuracy can be trusted, given how it was produced. | | |
 
-**Concerns, or anything we should change or state more clearly:**
+**Other concerns or suggested changes:**
 
 >
 
-**Consent to be named.** May we name you and state your professional background (role, field and years of experience) in the thesis alongside these findings?
+**Consent to be named.** May we name you and state your professional background in the thesis?
 
-- [ ] Yes. Background as you would like it stated: ____________________
-- [ ] Only the role ("an independent data scientist"), without my name
+- [ ] Yes. State my background as: ____________________
+- [ ] Credit me by role only ("an independent data scientist")
 - [ ] No
 
 **Reviewer:** Neriah "BJ" Ato
@@ -453,28 +369,24 @@ For each item, enter one verdict: **Agree**, **Agree with reservations**, **Disa
 
 ---
 
-## 10. Where everything is
+## 10. File locations
 
 | What | Where |
 |---|---|
-| Pipeline notebooks | `notebooks/5_splits.ipynb` … `notebooks/9_robustness.ipynb` |
+| Modeling notebooks | `notebooks/5_splits.ipynb` to `notebooks/9_robustness.ipynb` |
 | Shared definitions | `notebooks/modeling_config.py` |
-| All result files | `notebooks/artifacts/` |
-| Split record | `notebooks/artifacts/manifest.json` |
-| Every grid run | `notebooks/artifacts/tuning_results.csv` |
-| Selected configurations | `notebooks/artifacts/config_xgb.json`, `config_rf.json` |
-| The nine models' metrics | `notebooks/artifacts/ladder_metrics.csv` |
-| Bootstrap comparison | `notebooks/artifacts/central_comparison.json` |
-| Robustness checks | `notebooks/artifacts/robustness_*.csv`, `robustness_summary.json` |
-| SHAP results | `notebooks/artifacts/shap_*.csv`, `fig_shap_*.png` |
-| Test-set predictions, all nine models | `notebooks/artifacts/test_predictions.csv` |
-| Quick reproduction script | `scripts/export_popularity_model.py` |
-| *Upstream (context only):* data validation, lyrics filtering, sentiment | `notebooks/1_validation.ipynb`, `2_lyrics_filtering.ipynb`, `3_sentiment_analysis.ipynb`; explained in `docs/cleaning_process.md` |
-| *Upstream:* formula verification and behavioral checks | `notebooks/4_behavioral_checks.ipynb` → `notebooks/artifacts/behavioral_checks.json`, `fig_gap_*.png` |
-| *Downstream (out of scope):* demo application | `api/` (backend; `POST /predict` loads `models/popularity/xgboost_alignment_augmented.json`), `app/` (frontend) |
-| *Downstream:* demo audio-estimation validation | `docs/feature_extraction_calibration.md` (66-song validation, including the 2.65-point prediction-sensitivity figure) |
-| *Parallel review:* music teacher's materials | `samples/validation_sample.csv`, `samples/Track Validation Sheet.xlsx` |
+| All results | `notebooks/artifacts/` |
+| Split record | `manifest.json` |
+| Grid results and selected configs | `tuning_results.csv`, `config_xgb.json`, `config_rf.json` |
+| Model metrics | `ladder_metrics.csv` |
+| Bootstrap comparison | `central_comparison.json` |
+| Robustness | `robustness_*.csv`, `robustness_summary.json` |
+| SHAP | `shap_*.csv`, `fig_shap_*.png` |
+| Test predictions (all nine models) | `test_predictions.csv` |
+| Reproduction script | `scripts/export_popularity_model.py` |
+| Upstream cleaning and sentiment (context) | `notebooks/1_validation.ipynb` to `4_behavioral_checks.ipynb`, `docs/cleaning_process.md` |
+| Demo app (out of scope) | `api/`, `app/`; audio-estimation validation in `docs/feature_extraction_calibration.md` |
 
-**Questions while reviewing:** please contact either researcher, Joenell Conrad C. de Pedro or Ivan Paul V. Ruelan, at `[email or phone]`. We are happy to arrange a short call if that is easier.
+Files under `notebooks/artifacts/` are listed by name only.
 
-Thank you again for your time and expertise.
+**Contact:** Joenell Conrad C. de Pedro or Ivan Paul V. Ruelan, `[email or phone]`. We can also set up a short call.
