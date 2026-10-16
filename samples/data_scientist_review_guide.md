@@ -99,7 +99,7 @@ The four models with features are each trained twice: with **XGBoost** (the prim
 
 **A note on the null result.** The thesis committed in advance (Section 4.9.3(A)) to reporting a gain that does not survive resampling as "no detectable contribution". The headline figure is therefore not something we are trying to defend as a positive finding. What we need from you is a judgement on whether the *null* is trustworthy: whether the pipeline could plausibly have hidden a real effect, or manufactured the absence of one.
 
-### How your review fits into the whole project
+### The whole project: six objectives, one pipeline
 
 The thesis has six specific objectives (proposal Section 1.2.2, p. 12). Your review covers Objective 4 directly. The others either produce its inputs or consume its output, so this table shows what each one did and where it lives:
 
