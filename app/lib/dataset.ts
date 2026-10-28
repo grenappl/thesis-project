@@ -7,6 +7,7 @@ import path from "node:path";
 import Papa from "papaparse";
 
 import type {
+  AlignmentSummary,
   DatasetFacets,
   DatasetFilters,
   DatasetQueryResult,
@@ -275,5 +276,69 @@ export async function queryDataset(
     pageSize: PAGE_SIZE,
     totalPages,
     facets,
+  };
+}
+// ------------------------------ Alignment summary -------------------------
+
+const GAP_BIN_WIDTH = 0.5;
+const GAP_MIN = -2;
+const GAP_MAX = 2;
+
+function pearson(xs: number[], ys: number[]): number | null {
+  const n = xs.length;
+  if (n < 2) return null;
+  const meanX = xs.reduce((a, b) => a + b, 0) / n;
+  const meanY = ys.reduce((a, b) => a + b, 0) / n;
+  let cov = 0;
+  let varX = 0;
+  let varY = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - meanX;
+    const dy = ys[i] - meanY;
+    cov += dx * dy;
+    varX += dx * dx;
+    varY += dy * dy;
+  }
+  const denom = Math.sqrt(varX * varY);
+  return denom === 0 ? null : cov / denom;
+}
+
+/**
+ * Mean popularity per alignment-gap bin, plus the correlation of popularity
+ * with the signed gap and with its magnitude. Computed over the whole corpus.
+ */
+export async function getAlignmentSummary(): Promise<AlignmentSummary> {
+  const { tracks } = await getDatasetIndex();
+
+  const binCount = Math.round((GAP_MAX - GAP_MIN) / GAP_BIN_WIDTH);
+  const sums = new Array<number>(binCount).fill(0);
+  const counts = new Array<number>(binCount).fill(0);
+  for (const track of tracks) {
+    // A gap of exactly +2 belongs in the top bin, not a bin of its own.
+    const index = Math.min(
+      binCount - 1,
+      Math.max(0, Math.floor((track.alignment_gap - GAP_MIN) / GAP_BIN_WIDTH)),
+    );
+    sums[index] += track.popularity;
+    counts[index] += 1;
+  }
+
+  const bins = counts.flatMap((count, i) => {
+    if (count === 0) return [];
+    const low = GAP_MIN + i * GAP_BIN_WIDTH;
+    return [{
+      label: `${low.toFixed(1)} to ${(low + GAP_BIN_WIDTH).toFixed(1)}`,
+      tracks: count,
+      meanPopularity: sums[i] / count,
+    }];
+  });
+
+  const gaps = tracks.map((t) => t.alignment_gap);
+  const popularity = tracks.map((t) => t.popularity);
+  return {
+    tracks: tracks.length,
+    bins,
+    correlationGap: pearson(gaps, popularity),
+    correlationAbsGap: pearson(gaps.map(Math.abs), popularity),
   };
 }

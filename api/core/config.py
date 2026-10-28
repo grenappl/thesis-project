@@ -38,6 +38,17 @@ class Settings(BaseSettings):
     # model from notebook 7, exported (and verified against notebook 7's saved
     # test predictions) by scripts/export_popularity_model.py. Runs natively on
     # Windows; unlike Pipeline 2, inference needs no WSL2.
+    # SRS REQ-5.3-1: uploads are checked for type and size before the pipeline
+    # runs, so a malformed or oversized file fails fast with a clear message
+    # instead of tying up a WSL2 pipeline run.
+    demo_allowed_audio_extensions: list[str] = [".mp3", ".wav", ".flac", ".ogg", ".m4a"]
+    demo_max_upload_mb: int = 50
+
+    # Saved analyses (the History, Song and Analytics pages) live in a SQLite
+    # file, so the demo needs no database server. Relative paths resolve
+    # against the project root; `data/` is gitignored.
+    analyses_db_path: str = "data/app.db"
+
     popularity_model_path: str = "models/popularity/xgboost_alignment_augmented.json"
     popularity_model_metadata_path: str = "models/popularity/model_metadata.json"
 

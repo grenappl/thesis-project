@@ -1,8 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { PredictionResult } from "@/lib/types";
-import FeatureIcon from "./ui/feature-icon";
 import SongResult from "./SongResult";
 
 interface PredictionResultsProps {
@@ -35,7 +35,15 @@ export default function PredictionResults({
 
       <SongResult result={result} />
 
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center gap-3">
+        {result.id !== undefined && (
+          <Link
+            href={`/song/${result.id}`}
+            className="text-sm text-accent hover:underline"
+          >
+            Saved to history · open permanent link
+          </Link>
+        )}
         <button
           onClick={onReset}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors cursor-pointer"

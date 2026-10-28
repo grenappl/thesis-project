@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Search, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,11 +13,16 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { historyEntries } from "@/lib/mock-data";
-import { useRouter } from "next/navigation";
+import { deleteAnalysis, listAnalyses, PredictionError } from "@/lib/api";
+import { HistoryPage } from "@/lib/types";
 
-const DATE_OPTIONS = ["All time", "Last 7 days", "Last 30 days"] as const;
-const PAGE_SIZE = 5;
+const DATE_OPTIONS = [
+  { label: "All time", days: null },
+  { label: "Last 7 days", days: 7 },
+  { label: "Last 30 days", days: 30 },
+] as const;
+const PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -27,47 +33,74 @@ function formatDate(iso: string) {
   });
 }
 
-export default function HistoryPage() {
+function signed(value: number) {
+  return `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(2)}`;
+}
+
+export default function HistoryPageView() {
+  const router = useRouter();
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [dateRange, setDateRange] = useState<(typeof DATE_OPTIONS)[number]>("All time");
+  const [dayOption, setDayOption] = useState(0);
   const [page, setPage] = useState(1);
-  const router = useRouter()
+  const [data, setData] = useState<HistoryPage | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = useMemo(() => {
-    const now = Date.now();
-    const rangeMs =
-      dateRange === "Last 7 days"
-        ? 7 * 24 * 60 * 60 * 1000
-        : dateRange === "Last 30 days"
-          ? 30 * 24 * 60 * 60 * 1000
-          : Infinity;
+  // Typing shouldn't fire a request per keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [searchInput]);
 
-    return historyEntries.filter((entry) => {
-      const matchesSearch =
-        entry.track.toLowerCase().includes(search.toLowerCase()) ||
-        entry.artist.toLowerCase().includes(search.toLowerCase());
-      const matchesDate = now - new Date(entry.timestamp).getTime() <= rangeMs;
-      return matchesSearch && matchesDate;
-    });
-  }, [search, dateRange]);
+  const days = DATE_OPTIONS[dayOption].days;
 
-  const viewSong = (id: number) => {
-    router.push(`/song/${id}`);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setData(await listAnalyses({ search, days, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof PredictionError ? err.message : "Could not load history.");
+    } finally {
+      setLoading(false);
+    }
+  }, [search, days, page]);
+
+  useEffect(() => {
+    // Fetch-on-change: `load` sets state when the request settles.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
+
+  async function handleDelete(id: number, title: string) {
+    if (!window.confirm(`Delete "${title}" from your history?`)) return;
+    try {
+      await deleteAnalysis(id);
+      // Deleting the last row of a page would leave it empty; step back one.
+      if (data && data.items.length === 1 && page > 1) setPage(page - 1);
+      else await load();
+    } catch (err) {
+      setError(err instanceof PredictionError ? err.message : "Could not delete that entry.");
+    }
   }
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageSafe = Math.min(page, totalPages);
-  const pageItems = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const items = data?.items ?? [];
 
   return (
     <main className="flex-1 px-6 py-8 bg-background space-y-6 max-w-5xl w-full mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-primary mb-1">History</h1>
         <p className="text-sm text-muted-foreground">
-          Audit trail of predictions, uploads, and model runs.
+          Every song you have analysed. Select one to see its full result.
         </p>
       </div>
-      
+
       <div className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-center">
         <div className="relative flex-1">
           <Search
@@ -75,60 +108,87 @@ export default function HistoryPage() {
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
           <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by track or artist..."
             className="pl-8"
           />
         </div>
 
         <select
-          value={dateRange}
+          value={dayOption}
           onChange={(e) => {
-            setDateRange(e.target.value as typeof dateRange);
+            setDayOption(Number(e.target.value));
             setPage(1);
           }}
           className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-primary outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          {DATE_OPTIONS.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+          {DATE_OPTIONS.map((opt, i) => (
+            <option key={opt.label} value={i}>
+              {opt.label}
             </option>
           ))}
         </select>
       </div>
 
-      <div className="card overflow-hidden">
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm px-4 py-3 whitespace-pre-wrap">
+          {error}
+        </div>
+      )}
+
+      <div className={`card overflow-hidden transition-opacity ${loading ? "opacity-60" : ""}`}>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Track</TableHead>
               <TableHead>Popularity</TableHead>
+              <TableHead>Alignment gap</TableHead>
               <TableHead>Date</TableHead>
+              <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pageItems.length === 0 && (
+            {!loading && items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
-                  No entries match your filters.
+                  {search || days !== null
+                    ? "No entries match your filters."
+                    : "No analyses yet. Predict a song on the home page and it will show up here."}
                 </TableCell>
               </TableRow>
             )}
-            {pageItems.map((entry) => (
-              <TableRow key={entry.id} className='cursor-pointer' onClick={() => viewSong(1)}>
+            {items.map((entry) => (
+              <TableRow
+                key={entry.id}
+                className="cursor-pointer"
+                onClick={() => router.push(`/song/${entry.id}`)}
+              >
                 <TableCell>
-                  <p className="text-sm font-medium text-primary">{entry.track}</p>
-                  <p className="text-xs text-muted-foreground">{entry.artist}</p>
+                  <p className="text-sm font-medium text-primary">{entry.songTitle}</p>
+                  {entry.artist && <p className="text-xs text-muted-foreground">{entry.artist}</p>}
                 </TableCell>
-                <TableCell className="text-sm text-primary">
-                  {entry.popularity ?? "—"}
+                <TableCell className="text-sm text-primary tabular-nums">
+                  {Math.round(entry.popularity)}
+                </TableCell>
+                <TableCell className="text-sm text-primary tabular-nums">
+                  {signed(entry.alignmentGap)}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {formatDate(entry.timestamp)}
+                  {formatDate(entry.createdAt)}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Delete ${entry.songTitle}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(entry.id, entry.songTitle);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -138,14 +198,13 @@ export default function HistoryPage() {
 
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
-          Page {pageSafe} of {totalPages} — {filtered.length} entr
-          {filtered.length === 1 ? "y" : "ies"}
+          Page {Math.min(page, totalPages)} of {totalPages} — {total} entr{total === 1 ? "y" : "ies"}
         </p>
         <div className="flex items-center gap-1.5">
           <Button
             variant="outline"
             size="icon-sm"
-            disabled={pageSafe <= 1}
+            disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             aria-label="Previous page"
           >
@@ -154,7 +213,7 @@ export default function HistoryPage() {
           <Button
             variant="outline"
             size="icon-sm"
-            disabled={pageSafe >= totalPages}
+            disabled={page >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             aria-label="Next page"
           >
