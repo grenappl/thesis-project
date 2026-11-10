@@ -97,7 +97,12 @@ def main() -> int:
         return 1
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    model.save_model(MODEL_FILE)
+    # Early stopping keeps training for `early_stopping_rounds` past the best
+    # round, so the fitted booster holds trees the reported model never used
+    # (XGBRegressor.predict silently ignores them). Save only the trees up to
+    # and including the best round, so that anyone loading this file and
+    # calling plain Booster.predict gets exactly the thesis's model.
+    model.get_booster()[:model.best_iteration + 1].save_model(MODEL_FILE)
     manifest = mc.load_json('manifest.json')
     metadata = {
         'model': f'xgboost__{MODEL_NAME}',

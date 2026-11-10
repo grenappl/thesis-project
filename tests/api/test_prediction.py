@@ -56,3 +56,29 @@ def test_demo_feature_record_is_accepted_as_is(client):
               "key_alternative": 0, "mode_alternative": 1, "alignment_gap": 99.0}
     body = client.post("/predict", json=record).json()
     assert body["alignment_gap"] == pytest.approx(0.8)  # recomputed, client value ignored
+
+
+@needs_model
+def test_served_predictions_match_notebook_7(client):
+    """The served model must be the model the thesis reports on, not just one
+    that agrees with its own explanation: replay held-out test tracks and
+    compare with the predictions notebook 7 saved. This caught the booster's
+    early-stopping patience trees being included in inference (up to ~2 points
+    off); with them excluded the two agree to float32 rounding."""
+    import pandas as pd
+
+    root = Path(__file__).resolve().parents[2]
+    saved = pd.read_csv(root / "notebooks/artifacts/test_predictions.csv",
+                        usecols=["id", "xgboost__alignment_augmented"]).sample(200, random_state=0)
+    corpus = pd.concat(pd.read_csv(f) for f in sorted((root / "notebooks/data_filtered").glob("songs_*.csv")))
+    rows = saved.merge(corpus, on="id")
+    assert len(rows) == len(saved)
+
+    worst = 0.0
+    for _, row in rows.iterrows():
+        body = {f: (int(row[f]) if f in ("key", "mode") else float(row[f])) for f in SONG}
+        response = client.post("/predict", json=body)
+        assert response.status_code == 200, response.text
+        expected = min(max(row["xgboost__alignment_augmented"], 0.0), 100.0)
+        worst = max(worst, abs(response.json()["predicted_popularity"] - expected))
+    assert worst < 1e-3, f"served model drifted from notebook 7 by up to {worst:.4f} popularity points"

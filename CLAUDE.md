@@ -81,9 +81,15 @@ Full setup, one-time WSL2 steps, and why: [PIPELINE_SETUP.md](PIPELINE_SETUP.md)
 
 `api/routers/prediction.py` → `PopularityPredictionService` serves the XGBoost alignment-augmented model from `models/popularity/` (exported and verified against notebook 7 by `scripts/export_popularity_model.py`). It takes the extract-features record as-is, recomputes `alignment_gap` itself (ignores any client-sent value), requires lyrics (422 otherwise), and returns TreeSHAP contributions via XGBoost's `pred_contribs`, not the `shap` package. The visualizer calls it automatically after extraction when lyrics were given. `scripts/evaluate_prediction_sensitivity.py` measures how much Pipeline 2's estimation error moves this prediction (66 songs: mean 2.65 points vs the model's ~15-point RMSE).
 
+### Saved analyses (`/analyses`) — History, Song and Analytics pages
+
+The frontend's final step is `POST /analyses` (not bare `/predict`): `AnalysisService` runs the same `PopularityPredictionService`, then stores the input features and the full prediction in a **SQLite file** (`data/app.db`, gitignored, created on first use; `analyses_db_path` in settings). The History page (`GET /analyses`, server-side search/date filter/pagination, `DELETE /analyses/{id}`), the Song page (`GET /analyses/{id}`, server-rendered, redraws the whole result screen) and the Analytics page (`GET /analyses/stats`: totals, per-day counts, popularity buckets, mean |SHAP| per feature) all read from it. Analytics' "popularity by alignment gap" chart is separate: it summarises the whole dataset via the `getAlignmentSummary` server action in `app/lib/dataset.ts`. There is no mock data left in the app. A song without lyrics is rejected (422) before anything is written.
+
+This store is deliberately separate from the Postgres `tracks` stack below (`api/core/analyses_db.py`, synchronous SQLAlchemy, plain `def` endpoints) so the demo needs no database server.
+
 ### Layered `api/` convention (router → service → repository → model)
 
-Documented in [api/README.md](api/README.md); applies to the DB-backed `tracks` router/service/repository/model stack. `demo_features` (router + service) doesn't follow the repository/model layers — there's no DB involved, it's pure subprocess orchestration. Note the `Track` DB model's `audio_sentiment`/`emotional_alignment` field names predate and don't match Pipeline 2's `lyric_sentiment`/`alignment_gap` naming — they're not currently wired together.
+Documented in [api/README.md](api/README.md); applies to the DB-backed `tracks` router/service/repository/model stack, and `analyses` follows the same layering (with a synchronous SQLite session). `demo_features` (router + service) doesn't follow the repository/model layers — there's no DB involved, it's pure subprocess orchestration. Note the `Track` DB model's `audio_sentiment`/`emotional_alignment` field names predate and don't match Pipeline 2's `lyric_sentiment`/`alignment_gap` naming — they're not currently wired together.
 
 ### Models and downloaded data (all gitignored, fetched on demand)
 

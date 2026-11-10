@@ -3,8 +3,17 @@
 import { useRef, useState } from "react";
 import { Upload, Sparkles, ArrowRight, Loader2, FileAudio } from "lucide-react";
 
+/** Matches demo_allowed_audio_extensions in api/core/config.py. */
+const AUDIO_EXTENSIONS = /\.(mp3|wav|flac|ogg|m4a)$/i;
+
+export interface SongDetails {
+  /** Empty means "use the file name". */
+  songTitle: string;
+  artist: string;
+}
+
 interface PredictorFormProps {
-  onSubmit: (audioFile: File, lyrics: string) => void;
+  onSubmit: (audioFile: File, lyrics: string, details: SongDetails) => void;
   isLoading: boolean;
 }
 
@@ -14,6 +23,8 @@ export default function PredictorForm({
 }: PredictorFormProps) {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [lyrics, setLyrics] = useState("");
+  const [songTitle, setSongTitle] = useState("");
+  const [artist, setArtist] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -23,7 +34,7 @@ export default function PredictorForm({
   function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const file = files[0];
-    if (!/\.(mp3|wav)$/i.test(file.name)) return;
+    if (!AUDIO_EXTENSIONS.test(file.name)) return;
     setAudioFile(file);
   }
 
@@ -36,7 +47,7 @@ export default function PredictorForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || !audioFile) return;
-    onSubmit(audioFile, lyrics);
+    onSubmit(audioFile, lyrics, { songTitle, artist });
   }
 
   return (
@@ -79,7 +90,7 @@ export default function PredictorForm({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".mp3,.wav,audio/mpeg,audio/wav"
+              accept=".mp3,.wav,.flac,.ogg,.m4a,audio/*"
               className="hidden"
               onChange={(e) => handleFiles(e.target.files)}
             />
@@ -104,10 +115,34 @@ export default function PredictorForm({
                   Upload Audio File
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Drag & drop your .mp3 or .wav file here
+                  Drag & drop your .mp3, .wav, .flac, .ogg or .m4a file here
                 </p>
               </>
             )}
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3 mt-4">
+            <label className="block text-xs text-muted-foreground">
+              Song title (optional)
+              <input
+                type="text"
+                value={songTitle}
+                onChange={(e) => setSongTitle(e.target.value)}
+                placeholder={audioFile ? audioFile.name.replace(/\.[^.]+$/, "") : "Defaults to the file name"}
+                maxLength={255}
+                className="mt-1 w-full rounded-lg bg-muted/40 border border-border px-3 py-2 text-sm text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Artist (optional)
+              <input
+                type="text"
+                value={artist}
+                onChange={(e) => setArtist(e.target.value)}
+                maxLength={255}
+                className="mt-1 w-full rounded-lg bg-muted/40 border border-border px-3 py-2 text-sm text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            </label>
           </div>
         </div>
 

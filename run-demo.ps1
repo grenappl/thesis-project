@@ -64,6 +64,13 @@ Test-ModelFile "models\regression_heads\loudness.joblib" | Out-Null
 Test-ModelFile "models\regression_heads\liveness.joblib" | Out-Null
 
 Write-Host ""
+Write-Host "  Popularity model (behind POST /predict):"
+if (-not (Test-ModelFile "models\popularity\xgboost_alignment_augmented.json")) {
+    Write-Host "            Predictions will fail until it's exported. Run once, from the project root:" -ForegroundColor Yellow
+    Write-Host "            uv run python scripts/export_popularity_model.py" -ForegroundColor Yellow
+}
+
+Write-Host ""
 Write-Host "== Starting servers (this terminal, Ctrl+C to stop both) ==" -ForegroundColor Cyan
 Write-Host ""
 
@@ -82,6 +89,7 @@ try {
         -NoNewWindow -PassThru
 
     Write-Host ""
+    Write-Host "Demo app:   http://localhost:3005" -ForegroundColor Green
     Write-Host "Visualizer: http://localhost:3005/test-feature-extraction" -ForegroundColor Green
     Write-Host "API docs:   http://localhost:8010/docs" -ForegroundColor Green
     Write-Host ""

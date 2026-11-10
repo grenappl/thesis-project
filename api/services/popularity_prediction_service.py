@@ -61,6 +61,11 @@ class _LoadedModel:
     booster: xgb.Booster
     feature_names: tuple[str, ...]
     metadata: dict
+    # Trees up to and including the early-stopping best round. The saved
+    # booster also holds the patience rounds trained after it; the reported
+    # model (and XGBRegressor.predict) stops at best_iteration, so inference
+    # must too.
+    iteration_range: tuple[int, int]
 
 
 @lru_cache(maxsize=4)
@@ -82,7 +87,11 @@ def _load_model(model_path: str, metadata_path: str) -> _LoadedModel:
     unknown = set(expected) - set(_AUDIO_CONTINUOUS) - set(_KEY_COLUMNS) - {"lyric_sentiment", "alignment_gap"}
     if unknown:
         raise ModelUnavailableError(f"Model expects features this service can't build: {sorted(unknown)}")
-    return _LoadedModel(booster=booster, feature_names=expected, metadata=metadata)
+    best_iteration = metadata.get("best_iteration")
+    if best_iteration is None:
+        raise ModelUnavailableError(f"Model metadata has no best_iteration. {_EXPORT_HINT}")
+    return _LoadedModel(booster=booster, feature_names=expected, metadata=metadata,
+                        iteration_range=(0, int(best_iteration) + 1))
 
 
 def build_feature_vector(request: PredictionRequest, alignment_gap: float) -> dict[str, float]:
@@ -123,7 +132,9 @@ class PopularityPredictionService:
         # pred_contribs gives exact TreeSHAP values (the same algorithm as
         # shap.TreeExplainer in notebook 8), one per feature plus a final bias
         # column; they sum to the raw prediction.
-        contribs = loaded.booster.predict(matrix, pred_contribs=True)[0]
+        contribs = loaded.booster.predict(
+            matrix, pred_contribs=True, iteration_range=loaded.iteration_range
+        )[0]
         per_feature = dict(zip(loaded.feature_names, (float(c) for c in contribs[:-1])))
         base_value = float(contribs[-1])
         raw_prediction = base_value + sum(per_feature.values())
