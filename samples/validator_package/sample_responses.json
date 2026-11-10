@@ -1,0 +1,350 @@
+{
+  "actual_popularity_p10": {
+    "track": {
+      "id": "04TnFgHG9yPJGc3512C0MS",
+      "name": "Unas Slayer of the Gods",
+      "genre": "Rock",
+      "year": 2007,
+      "actual_popularity": 5
+    },
+    "request": {
+      "tempo": 110.908,
+      "loudness": -6.577,
+      "key": 7,
+      "mode": 1,
+      "energy": 0.967,
+      "danceability": 0.285,
+      "speechiness": 0.163,
+      "acousticness": 0.000359,
+      "instrumentalness": 0.713,
+      "liveness": 0.0962,
+      "duration_ms": 703080.0,
+      "valence": 0.0596,
+      "lyric_sentiment": 0.9531
+    },
+    "response": {
+      "predicted_popularity": 13.577890790533274,
+      "base_value": 24.53510856628418,
+      "lyric_sentiment": 0.9531,
+      "valence_normalized": -0.8808,
+      "alignment_gap": 1.8338999999999999,
+      "contributions": {
+        "audio": -11.296049677301198,
+        "lyric_sentiment": -0.5193154811859131,
+        "alignment_gap": 0.858147382736206
+      },
+      "features": [
+        {
+          "feature": "energy",
+          "value": 0.967,
+          "contribution": -2.967337131500244
+        },
+        {
+          "feature": "danceability",
+          "value": 0.285,
+          "contribution": -2.617112398147583
+        },
+        {
+          "feature": "instrumentalness",
+          "value": 0.713,
+          "contribution": -2.43965744972229
+        },
+        {
+          "feature": "duration_ms",
+          "value": 703080.0,
+          "contribution": -1.460951328277588
+        },
+        {
+          "feature": "alignment_gap",
+          "value": 1.8338999999999999,
+          "contribution": 0.858147382736206
+        },
+        {
+          "feature": "acousticness",
+          "value": 0.000359,
+          "contribution": -0.8189718127250671
+        },
+        {
+          "feature": "tempo",
+          "value": 110.908,
+          "contribution": -0.7117710709571838
+        },
+        {
+          "feature": "lyric_sentiment",
+          "value": 0.9531,
+          "contribution": -0.5193154811859131
+        },
+        {
+          "feature": "loudness",
+          "value": -6.577,
+          "contribution": -0.492819219827652
+        },
+        {
+          "feature": "valence",
+          "value": 0.0596,
+          "contribution": 0.426324725151062
+        },
+        {
+          "feature": "liveness",
+          "value": 0.0962,
+          "contribution": 0.30323877930641174
+        },
+        {
+          "feature": "speechiness",
+          "value": 0.163,
+          "contribution": -0.20116370916366577
+        },
+        {
+          "feature": "key",
+          "value": 7,
+          "contribution": -0.16289930837228894
+        },
+        {
+          "feature": "mode",
+          "value": 1.0,
+          "contribution": -0.15292975306510925
+        }
+      ],
+      "model": {
+        "name": "xgboost__alignment_augmented",
+        "test_r2": 0.06783130544012128,
+        "test_rmse": 15.092738814736881,
+        "trained_rows": 179218,
+        "exported_at": "2026-11-10T09:12:34+00:00",
+        "note": "Demo-app inference only (Objective 6). Predictions for new songs use approximated audio descriptors and are illustrative (Section 1.4)."
+      }
+    }
+  },
+  "actual_popularity_p50": {
+    "track": {
+      "id": "16x3rMZxWGfzXemC073m3C",
+      "name": "Leprosy - Live in Germany April 13th 1993",
+      "genre": "Rock",
+      "year": 2011,
+      "actual_popularity": 22
+    },
+    "request": {
+      "tempo": 106.315,
+      "loudness": -7.754,
+      "key": 9,
+      "mode": 1,
+      "energy": 0.981,
+      "danceability": 0.219,
+      "speechiness": 0.19,
+      "acousticness": 1.35e-05,
+      "instrumentalness": 0.0206,
+      "liveness": 0.6950000000000001,
+      "duration_ms": 362733.0,
+      "valence": 0.051,
+      "lyric_sentiment": -0.9861
+    },
+    "response": {
+      "predicted_popularity": 12.173159493599087,
+      "base_value": 24.53510856628418,
+      "lyric_sentiment": -0.9861,
+      "valence_normalized": -0.898,
+      "alignment_gap": -0.08809999999999996,
+      "contributions": {
+        "audio": -12.587506250943989,
+        "lyric_sentiment": 0.3449907600879669,
+        "alignment_gap": -0.11943358182907104
+      },
+      "features": [
+        {
+          "feature": "energy",
+          "value": 0.981,
+          "contribution": -3.710256576538086
+        },
+        {
+          "feature": "danceability",
+          "value": 0.219,
+          "contribution": -3.284494400024414
+        },
+        {
+          "feature": "loudness",
+          "value": -7.754,
+          "contribution": -1.6297199726104736
+        },
+        {
+          "feature": "instrumentalness",
+          "value": 0.0206,
+          "contribution": -1.309204339981079
+        },
+        {
+          "feature": "liveness",
+          "value": 0.6950000000000001,
+          "contribution": -1.1248559951782227
+        },
+        {
+          "feature": "duration_ms",
+          "value": 362733.0,
+          "contribution": -0.8718226552009583
+        },
+        {
+          "feature": "speechiness",
+          "value": 0.19,
+          "contribution": 0.6355850696563721
+        },
+        {
+          "feature": "acousticness",
+          "value": 1.35e-05,
+          "contribution": -0.5988814830780029
+        },
+        {
+          "feature": "key",
+          "value": 9,
+          "contribution": -0.5303993015550077
+        },
+        {
+          "feature": "tempo",
+          "value": 106.315,
+          "contribution": -0.5222797393798828
+        },
+        {
+          "feature": "valence",
+          "value": 0.051,
+          "contribution": 0.4296446144580841
+        },
+        {
+          "feature": "lyric_sentiment",
+          "value": -0.9861,
+          "contribution": 0.3449907600879669
+        },
+        {
+          "feature": "alignment_gap",
+          "value": -0.08809999999999996,
+          "contribution": -0.11943358182907104
+        },
+        {
+          "feature": "mode",
+          "value": 1.0,
+          "contribution": -0.07082147151231766
+        }
+      ],
+      "model": {
+        "name": "xgboost__alignment_augmented",
+        "test_r2": 0.06783130544012128,
+        "test_rmse": 15.092738814736881,
+        "trained_rows": 179218,
+        "exported_at": "2026-11-10T09:12:34+00:00",
+        "note": "Demo-app inference only (Objective 6). Predictions for new songs use approximated audio descriptors and are illustrative (Section 1.4)."
+      }
+    }
+  },
+  "actual_popularity_p90": {
+    "track": {
+      "id": "09byaVBbIvJWJHdZEl4Sin",
+      "name": "Benzo",
+      "genre": "Pop",
+      "year": 2019,
+      "actual_popularity": 46
+    },
+    "request": {
+      "tempo": 97.354,
+      "loudness": -10.376,
+      "key": 5,
+      "mode": 0,
+      "energy": 0.326,
+      "danceability": 0.739,
+      "speechiness": 0.0369,
+      "acousticness": 0.512,
+      "instrumentalness": 0.0515,
+      "liveness": 0.137,
+      "duration_ms": 150512.0,
+      "valence": 0.273,
+      "lyric_sentiment": -0.7002
+    },
+    "response": {
+      "predicted_popularity": 30.81992047931999,
+      "base_value": 24.53510856628418,
+      "lyric_sentiment": -0.7002,
+      "valence_normalized": -0.45399999999999996,
+      "alignment_gap": -0.24620000000000009,
+      "contributions": {
+        "audio": 7.1675442745909095,
+        "lyric_sentiment": -0.7096424698829651,
+        "alignment_gap": -0.1730898916721344
+      },
+      "features": [
+        {
+          "feature": "danceability",
+          "value": 0.739,
+          "contribution": 4.589040756225586
+        },
+        {
+          "feature": "energy",
+          "value": 0.326,
+          "contribution": 2.188255548477173
+        },
+        {
+          "feature": "loudness",
+          "value": -10.376,
+          "contribution": -1.9327447414398193
+        },
+        {
+          "feature": "valence",
+          "value": 0.273,
+          "contribution": 1.5312899351119995
+        },
+        {
+          "feature": "duration_ms",
+          "value": 150512.0,
+          "contribution": 0.8042415380477905
+        },
+        {
+          "feature": "lyric_sentiment",
+          "value": -0.7002,
+          "contribution": -0.7096424698829651
+        },
+        {
+          "feature": "instrumentalness",
+          "value": 0.0515,
+          "contribution": -0.6636936068534851
+        },
+        {
+          "feature": "liveness",
+          "value": 0.137,
+          "contribution": 0.6175997853279114
+        },
+        {
+          "feature": "mode",
+          "value": 0.0,
+          "contribution": 0.44905930757522583
+        },
+        {
+          "feature": "tempo",
+          "value": 97.354,
+          "contribution": -0.4010851979255676
+        },
+        {
+          "feature": "speechiness",
+          "value": 0.0369,
+          "contribution": -0.24309863150119781
+        },
+        {
+          "feature": "acousticness",
+          "value": 0.512,
+          "contribution": 0.181432843208313
+        },
+        {
+          "feature": "alignment_gap",
+          "value": -0.24620000000000009,
+          "contribution": -0.1730898916721344
+        },
+        {
+          "feature": "key",
+          "value": 5,
+          "contribution": 0.04724673833698034
+        }
+      ],
+      "model": {
+        "name": "xgboost__alignment_augmented",
+        "test_r2": 0.06783130544012128,
+        "test_rmse": 15.092738814736881,
+        "trained_rows": 179218,
+        "exported_at": "2026-11-10T09:12:34+00:00",
+        "note": "Demo-app inference only (Objective 6). Predictions for new songs use approximated audio descriptors and are illustrative (Section 1.4)."
+      }
+    }
+  }
+}
